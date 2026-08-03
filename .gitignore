@@ -4,3 +4,32 @@ node_modules
 .vscode/*
 !.vscode/extensions.json
 .claude/settings.local.json
+
+# Go
+/terraform-provider-linear
+/dist/
+*.test
+*.out
+
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Local provider dev overrides
+.terraformrc
+terraform.rc
+
+# Local secrets / live-test credentials
+.env
+.env.*
+
+# AI scratch notes (scoping/handoff, not shipped)
+temp_ai.md
+session.md
+
+# Linear GraphQL schema, pulled by scripts/fetch-schema.sh — the field source of
+# truth while building resources, but 1.2 MB of generated SDL. Not shipped.
+.linear-schema.graphql

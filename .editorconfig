@@ -14,5 +14,8 @@ trim_trailing_whitespace = false
 [*.{yml,yaml}]
 indent_size = 2
 
-[Makefile]
+[*.go]
+indent_style = tab
+
+[{Makefile,GNUmakefile}]
 indent_style = tab

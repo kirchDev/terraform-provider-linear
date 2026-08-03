@@ -50,9 +50,9 @@ body:
   - type: input
     id: area
     attributes:
-      label: Affected area / component
-      description: The file, module, command or feature involved — if you know it.
-      placeholder: e.g. the CLI, the auth module, .github/workflows/ci.yml
+      label: Affected resource / data source
+      description: The resource, data source or provider setting involved — if you know it.
+      placeholder: 'e.g. linear_custom_view, linear_workspace_settings'
     validations:
       required: false
 
@@ -62,8 +62,8 @@ body:
       label: Version & environment
       description: The versions and platform this happens on.
       placeholder: |
-        - Version / commit:
-        - Runtime (node / php / go / …):
+        - Provider version:
+        - OpenTofu / Terraform version:
         - OS:
     validations:
       required: true

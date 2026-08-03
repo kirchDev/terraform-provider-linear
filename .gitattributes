@@ -4,3 +4,5 @@
 # Keep generated/managed files out of diffs and language stats.
 pnpm-lock.yaml linguist-generated=true
 CHANGELOG.md linguist-generated=true
+# docs/ is rendered by tfplugindocs (`make docs`) — generated, not hand-written.
+docs/** linguist-generated=true
