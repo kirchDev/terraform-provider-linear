@@ -35,7 +35,7 @@ output "workspace" {
 - `logo_url` (String) URL of the workspace logo.
 - `name` (String) Display name of the workspace.
 - `releases_enabled` (Boolean) Whether releases are enabled — the prerequisite for `linear_release_pipeline`.
-- `roadmap_enabled` (Boolean) Whether roadmaps are enabled.
+- `roadmap_enabled` (Boolean) Whether Initiatives are enabled. Linear renamed the feature to Initiatives; its API still calls the field `roadmapEnabled`, the name it shipped under.
 - `saml_enabled` (Boolean) Whether SAML single sign-on is enabled.
 - `scim_enabled` (Boolean) Whether SCIM user provisioning is enabled.
 - `url_key` (String) URL slug of the workspace — the `<key>` in `linear.app/<key>`.
