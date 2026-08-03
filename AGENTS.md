@@ -30,7 +30,7 @@ The repo name format `NAMESPACE/terraform-provider-NAME` is **mandatory** for th
 ## Current state
 
 > [!IMPORTANT]
-> **25 resources and 12 data sources are implemented; nothing has been released or run against a real workspace.** Every test drives an in-memory mock, so whether Linear accepts each input field as modelled, and what its real defaults are, is still unverified.
+> **25 resources and 12 data sources are implemented and released as v0.1.0; nothing has run against a real workspace.** Every test drives an in-memory mock, so whether Linear accepts each input field as modelled, and what its real defaults are, is still unverified.
 
 Two layers coexist:
 
