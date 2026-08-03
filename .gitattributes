@@ -1,0 +1,6 @@
+# Normalize line endings to LF on checkin, auto on checkout.
+* text=auto eol=lf
+
+# Keep generated/managed files out of diffs and language stats.
+pnpm-lock.yaml linguist-generated=true
+CHANGELOG.md linguist-generated=true

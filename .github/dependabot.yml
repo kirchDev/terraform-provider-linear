@@ -1,0 +1,47 @@
+# Dependabot opens its PRs against the `dev` integration branch, not the default
+# branch. A main-only repo drops both `target-branch` lines — see CLAUDE.md.
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: 'fix(deps)'
+      prefix-development: 'chore(deps-dev)'
+    directory: '/'
+    target-branch: 'dev'
+    schedule:
+      interval: 'weekly'
+    # Mirror the npm `minimumReleaseAge` (3 days): hold updates back until a
+    # release has been public for a few days, dodging just-published malicious
+    # or broken versions. Applies to every ecosystem below too.
+    cooldown:
+      default-days: 3
+    labels:
+      - 'dependencies'
+      - 'stack: javascript'
+    groups:
+      npm-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  - package-ecosystem: 'github-actions'
+    commit-message:
+      prefix: 'chore(deps)'
+    directory: '/'
+    target-branch: 'dev'
+    schedule:
+      interval: 'monthly'
+    cooldown:
+      default-days: 3
+    labels:
+      - 'dependencies'
+      - 'stack: github-actions'
+    groups:
+      actions-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
