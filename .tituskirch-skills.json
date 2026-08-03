@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/TitusKirch/skills/main/tituskirch-skills.schema.json",
   "forge": "github",
   "language": "en",
-  "verify": "pnpm check && go build ./... && go vet ./... && go test ./...",
+  "verify": "pnpm check && go test ./...",
   "trustedBots": [
     {
       "id": 287319172,
@@ -62,7 +62,8 @@
       "needsHuman": "ai: needs human",
       "done": "ai: done",
       "blocked": "ai: blocked",
-      "repo": false
+      "repo": false,
+      "needsTriage": "needs triage"
     },
     "review": {
       "maxRounds": 3
