@@ -29,7 +29,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, javascript-typescript]
+        # `go` is in here deliberately, unlike the sibling providers — the
+        # provider handles a workspace-scoped API key, so it is worth scanning.
+        # CodeQL supports build-mode `none` for Go, so no build step is needed.
+        language: [actions, go, javascript-typescript]
 
     steps:
       - uses: actions/checkout@v7
