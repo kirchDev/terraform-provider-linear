@@ -1,6 +1,6 @@
 <!--
 Thanks for contributing! Please fill out the sections below.
-Title should follow Conventional Commits (e.g. "feat: add rate limiting").
+Title should follow Conventional Commits (e.g. "feat(custom-view): add linear_custom_view resource").
 -->
 
 ## Summary
@@ -17,9 +17,10 @@ Title should follow Conventional Commits (e.g. "feat: add rate limiting").
 
 ## Checklist
 
-- [ ] The project's checks pass locally (lint / format / tests, as applicable)
+- [ ] `make fmt && make vet && make test` passes (Go)
+- [ ] `pnpm check` passes locally (meta layer)
 - [ ] Tests added or updated — or not applicable
-- [ ] Docs updated (README / inline help / comments) — or not applicable
+- [ ] Docs regenerated with `make docs` if the schema changed
 - [ ] Commits follow Conventional Commits
 
 ## Related issues
