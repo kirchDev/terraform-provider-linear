@@ -413,7 +413,10 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 			},
 			"fiscal_year_start_month": optFloat("Month the fiscal year starts in, `0` being January."),
 
-			"roadmap_enabled":           optBool("Whether roadmaps are available in the workspace."),
+			"roadmap_enabled": optBool("Whether Initiatives are available in the workspace. Linear renamed the " +
+				"feature to Initiatives; its API still calls the field `roadmapEnabled`, the name it shipped " +
+				"under. This is the workspace-level toggle — `linear_team.initiatives_enabled` is the " +
+				"per-team one."),
 			"feed_enabled":              optBool("Whether the workspace feed is available."),
 			"customers_enabled":         optBool("Whether Linear Customers is enabled — the prerequisite for `linear_customer_status` and `linear_customer_tier`."),
 			"generated_updates_enabled": optBool("Whether Linear generates project and initiative updates automatically."),

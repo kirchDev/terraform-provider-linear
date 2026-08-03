@@ -90,7 +90,7 @@ resource "linear_workspace_settings" "this" {
 - `pull_request_tour_enabled` (Boolean) Whether the pull request tour is shown.
 - `reduced_personal_information` (Boolean) Whether Linear minimises the personal information it stores. **Write-only**, for the same reason as `sla_enabled`.
 - `restrict_agent_invocation_to_members` (Boolean) Whether only workspace members — not guests — may invoke agents.
-- `roadmap_enabled` (Boolean) Whether roadmaps are available in the workspace.
+- `roadmap_enabled` (Boolean) Whether Initiatives are available in the workspace. Linear renamed the feature to Initiatives; its API still calls the field `roadmapEnabled`, the name it shipped under. This is the workspace-level toggle — `linear_team.initiatives_enabled` is the per-team one.
 - `security_settings_json` (String) Workspace security settings as a JSON object — this is where member invitation, team creation and label management restrictions live now, e.g. `jsonencode({ allowMembersToInvite = false, restrictTeamCreationToAdmins = true })`. Compared semantically.
 - `sla_enabled` (Boolean) Whether SLAs are enabled. **Write-only** — Linear accepts it but does not report it back, so drift in this attribute cannot be detected.
 - `slack_auto_create_project_channel` (Boolean) Whether a Slack channel is created for every new project.
