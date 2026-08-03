@@ -29,7 +29,7 @@ resource "linear_custom_view" "in_review" {
 Teams, labels, workflow states, views and git automation declared in HCL and reconciled by OpenTofu — not clicked together in the Linear UI. **Scope is workspace configuration, not issue content.**
 
 > [!WARNING]
-> **Not released yet.** Every resource and data source below is implemented and covered by tests against a GraphQL mock, but nothing has been published to the registry and nothing has run against a real workspace yet. See [`PLAN.md`](PLAN.md) for what remains. Once released: pre-1.0, so pin an exact version and test before relying on it.
+> **Not released yet.** Every resource and data source below is implemented and covered by tests against a GraphQL mock, but nothing has been published to the registry and nothing has run against a real workspace yet. Once released: pre-1.0, so pin an exact version and test before relying on it.
 
 ## 📦 Install & run
 

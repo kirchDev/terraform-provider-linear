@@ -25,12 +25,12 @@ A first-party **OpenTofu / Terraform provider for [Linear](https://linear.app)**
 
 The repo name format `NAMESPACE/terraform-provider-NAME` is **mandatory** for the OpenTofu/Terraform registry — it's not a style choice.
 
-**Scope is workspace configuration, not issue content** — there is no `linear_issue`, `linear_project` or `linear_document` resource. `PLAN.md` carries the full in/out list and the reasoning.
+**Scope is workspace configuration, not issue content** — there is no `linear_issue`, `linear_project` or `linear_document` resource. Content, `cycle` (Linear generates those itself), the 54 OAuth `integration*` mutations, `favorite`, and anything that is an event rather than state were all considered and deliberately left out. Don't add one without a conversation.
 
 ## Current state
 
 > [!IMPORTANT]
-> **25 resources and 12 data sources are implemented; nothing has been released or run against a real workspace.** [`PLAN.md`](PLAN.md) remains the reference for _why_ each entity is in or out of scope — read it before adding one.
+> **25 resources and 12 data sources are implemented; nothing has been released or run against a real workspace.** Every test drives an in-memory mock, so whether Linear accepts each input field as modelled, and what its real defaults are, is still unverified.
 
 Two layers coexist:
 
@@ -119,4 +119,4 @@ TF_CLI_CONFIG_FILE=/tmp/linear.tfrc tofu -chdir=path/to/example validate
 
 ## Don't relitigate
 
-The decision to build our own provider rather than extend `terraform-community-providers/linear` v0.3.7 is settled. That provider covers 7 of ~25 managable entities, has no views ([PR #29](https://github.com/terraform-community-providers/terraform-provider-linear/pull/29) open since Nov 2023), models `workflow_state.type` as an enum that excludes `duplicate`, does not round-trip the `merge` git event, and exposes 11 of ~50 `organizationUpdate` fields. The full API-vs-provider gap analysis lives in `PLAN.md`.
+The decision to build our own provider rather than extend `terraform-community-providers/linear` v0.3.7 is settled. That provider covers 7 of ~25 managable entities, has no views ([PR #29](https://github.com/terraform-community-providers/terraform-provider-linear/pull/29) open since Nov 2023), models `workflow_state.type` as an enum that excludes `duplicate`, does not round-trip the `merge` git event, and exposes 11 of ~50 `organizationUpdate` fields.
