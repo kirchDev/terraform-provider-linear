@@ -104,9 +104,14 @@ Everything except the provider itself:
    on had Go 1.18, so `go build` was never executed here.)
 2. **`terraform-plugin-framework-jsontypes` is not in `go.mod` yet.** It is
    required for the `*_json` attributes (see phase 3) — `go get` it in phase 2.
-3. **CodeQL scans `go` here**, unlike the sibling providers. Verify the first run
-   is green; if `build-mode: none` misbehaves for Go, drop it back to
-   `[actions, javascript-typescript]` rather than leaving a red required check.
+3. ~~**CodeQL scans `go` here**, unlike the sibling providers. Verify the first
+   run is green; if `build-mode: none` misbehaves for Go, drop it back to
+   `[actions, javascript-typescript]` rather than leaving a red required
+   check.~~ **Resolved.** The first run failed: Go rejects `build-mode: none`
+   outright. The build mode is now set per language — `autobuild` for Go, with
+   `setup-go` reading `go.mod`, and `none` for the other two. Dropping `go`
+   from the matrix was the alternative and was not taken: the reason for
+   scanning it stands, and the failure was a one-line config error.
 4. **No `dev` branch yet.** `.tituskirch-skills.json` sets `pr.base: dev` and
    `release.stages: [dev, main]`, and `ci.yml` / `codeql.yml` / `dependabot.yml`
    all reference `dev`. Create and push it before the first PR.
