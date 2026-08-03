@@ -1,113 +1,103 @@
 <div align="center">
 
-# 🏗️ scaffold
+# 📐 terraform-provider-linear
 
-**The kirchDev baseline — everything a new repo should ship with on day one, nothing more**
+**Manage your Linear workspace as code — teams, labels, workflow states, views, git automation and workspace settings, reconciled by OpenTofu**
+
+[![Release](https://img.shields.io/github/v/release/kirchDev/terraform-provider-linear?style=flat-square&label=release&color=5E6AD2)](https://github.com/kirchDev/terraform-provider-linear/releases/latest)
+[![OpenTofu Registry](https://img.shields.io/badge/opentofu-kirchdev%2Flinear-FFDA18?style=flat-square&logo=opentofu&logoColor=black)](https://search.opentofu.org/provider/kirchdev/linear/latest)
+[![Terraform Registry](https://img.shields.io/badge/terraform-kirchdev%2Flinear-7b42bc?style=flat-square&logo=terraform&logoColor=white)](https://registry.terraform.io/providers/kirchDev/linear/latest)
+[![Tests](https://img.shields.io/github/actions/workflow/status/kirchDev/terraform-provider-linear/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/kirchDev/terraform-provider-linear/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/kirchDev/terraform-provider-linear?style=flat-square&color=5E6AD2)](LICENSE)
 
 </div>
 
 ---
 
-```bash
-gh repo create my-new-repo --template TitusKirch/scaffold
+```hcl
+resource "linear_custom_view" "in_review" {
+  name    = "In Review"
+  team_id = linear_team.eng.id
+  shared  = true
+
+  filter_json = jsonencode({
+    state = { type = { eq = "started" } }
+  })
+}
 ```
 
-That's it. Click **Use this template** (or use `gh`), edit a handful of placeholders, and the meta layer — lint, format, commit hooks, CI, CodeQL, Dependabot, release-please — is already wired up.
+Teams, labels, workflow states, views and git automation declared in HCL and reconciled by OpenTofu — not clicked together in the Linear UI. **Scope is workspace configuration, not issue content.**
 
-## ✨ What's in the box
+> [!WARNING]
+> **Not released yet.** Every resource and data source below is implemented and covered by tests against a GraphQL mock, but nothing has been published to the registry and nothing has run against a real workspace yet. See [`PLAN.md`](PLAN.md) for what remains. Once released: pre-1.0, so pin an exact version and test before relying on it.
 
-- **🟢 Node + pnpm pinned** — `.nvmrc` (Node 24), `pnpm-workspace.yaml` (pnpm 11 with sane defaults), `package.json` with `packageManager`.
-- **🧹 Lint & format via oxc** — `.oxlintrc.json`, `.oxfmtrc.json`, single `pnpm check` gate.
-- **🪝 Commit hooks** — Husky + `lint-staged` + `commitlint` enforcing Conventional Commits.
-- **🤖 Dependency PRs** — Dependabot (npm weekly, actions monthly) + `taze.config.js` for interactive upgrades.
-- **🔁 release-please** — full workflow + config + manifest so the new repo can publish from its first commit.
-- **🛡️ GitHub workflows** — `ci.yml` (lint + format check on PR), `codeql.yml` (push/PR + weekly).
-- **📋 Issue / PR templates** — bug report, feature request, question (`.yml` forms) + PR checklist.
-- **📄 Standard meta** — `LICENSE`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`.
-- **🤖 Agent-ready** — `CLAUDE.md` + `AGENTS.md` (kept in sync), `.tituskirch-skills.json`, baseline `.claude/settings.json` permissions, `pnpm skills:update` wiring.
+## 📦 Install & run
 
-The actual project code can be anything — PHP, Go, Rust, Vue, plain shell. `scaffold` only owns the meta layer that sits on top.
+```hcl
+terraform {
+  required_providers {
+    linear = {
+      source  = "kirchdev/linear"
+      version = "~> 0.1"
+    }
+  }
+}
 
-## 🚀 Setup
+provider "linear" {
+  token = var.linear_token # or set LINEAR_TOKEN
+}
 
-After clicking **Use this template**:
-
-1. Clone your new repo.
-2. Replace the placeholders listed in [Customising the template](#-customising-the-template).
-3. Reset release-please as described in [Resetting release-please](#-resetting-release-please) (only if you want to start at `v0.0.0`).
-4. `pnpm install` — Husky activates the hooks via the `prepare` script.
-5. Add your project code and ship the first commit:
-
-   ```bash
-   git commit -m "chore: initial commit from scaffold"
-   ```
-
-## 🤖 AI & skills
-
-Every repo from this template is agent-ready on day one:
-
-- **`CLAUDE.md` + `AGENTS.md`** — one set of guidance for Claude Code and vendor-neutral agent tools (Codex, OpenCode, Cursor, Copilot). Kept **byte-identical** — edit one, edit the other.
-- **`.claude/settings.json`** — baseline permissions: read-only git and the `pnpm` scripts are allowed; destructive git (`push`, `reset --hard`, `clean -f`, …) is denied.
-- **`.tituskirch-skills.json`** — configures the [TitusKirch skills](https://github.com/TitusKirch/skills) (commit, PR, issue, release, docs) per repo.
-
-Install the skill bundle, then keep project-scoped skills fresh:
-
-```bash
-pnpm dlx skills add TitusKirch/skills   # add the bundle — npx / yarn dlx / bunx work too
-pnpm skills:update                       # refresh project-scoped skills
+resource "linear_team" "eng" {
+  name = "Engineering"
+  key  = "ENG"
+}
 ```
 
-## 🧰 Customising the template
+```bash
+export LINEAR_TOKEN="lin_api_..."   # Linear → Settings → API → Personal API keys
+tofu plan
+```
 
-Every file below references `TitusKirch/scaffold`, the maintainer's name, or the maintainer's email. Search-and-replace these to your repo's identity before the first push.
+> [!NOTE]
+> A Linear API key is **workspace-scoped**. Managing several workspaces needs one aliased provider per workspace, each with its own key.
 
-| File                                  | Replace                                                                          |
-| :------------------------------------ | :------------------------------------------------------------------------------- |
-| `package.json`                        | `name`, `description`, `homepage`, `bugs.url`, `repository.url`, `author`        |
-| `README.md`                           | Project title, tagline, hook snippet, every `TitusKirch/scaffold` link           |
-| `LICENSE`                             | Copyright year + holder                                                          |
-| `CODE_OF_CONDUCT.md`                  | Enforcement contact email                                                        |
-| `CONTRIBUTING.md`                     | Every `TitusKirch/scaffold` link, the development setup section                  |
-| `SECURITY.md`                         | Advisory URL, contact email, scope wording                                       |
-| `.github/ISSUE_TEMPLATE/*.yml`        | Generic as shipped. `config.yml` links questions/ideas/possible-bugs to the Discord forum — private repos without a forum drop that block; optionally add stack-specific version fields to `bug_report.yml` |
-| `.github/pull_request_template.md`    | Example commit message in the title hint                                         |
-| `release-please-config.json`          | `packages["."]["package-name"]`                                                  |
-| `CLAUDE.md` + `AGENTS.md`             | **Delete both** and regenerate with `/init` in Claude Code — scaffold-specific, keep byte-identical |
+## ✨ Features
 
-> [!TIP]
-> A quick `grep -rn "TitusKirch/scaffold" .` catches every reference in one sweep.
+- **📐 Linear as code** — teams, labels, workflow states, views, git automation, webhooks and workspace settings in HCL.
+- **🔭 Views included** — `linear_custom_view` with team, project and initiative scope. Filters are expressed as JSON and compared semantically, so a server-normalised filter doesn't read as drift.
+- **🧩 Full workspace-settings coverage** — every field `organizationUpdate` accepts, not a subset.
+- **🌿 Git automation per event** — `draft`, `start`, `review`, `mergeable` and `merge` each as their own resource, so all five round-trip on import.
+- **🚀 OpenTofu & Terraform** — published as `kirchdev/linear` on both registries.
+- **⚡ Modern stack** — `terraform-plugin-framework`; docs generated from the schema.
 
-> [!IMPORTANT]
-> **Private repo?** Two defaults are public-only. Delete `.github/workflows/codeql.yml` (CodeQL needs GitHub Advanced Security — free only on public repos), and swap the MIT `LICENSE` + README footer for a proprietary notice with `package.json` `"license": "UNLICENSED"`.
+## 🗺️ Coverage
 
-## 🔁 Resetting release-please
+Scope is **workspace configuration**. Issues, projects, initiatives, documents and comments are content — they belong in Linear's UI and its API, not in a state file.
 
-`scaffold` ships with an initial manifest pinned at `0.0.0`. For most cases you can leave it alone — release-please will simply propose a first release PR after your first conventional commit on `main`. If you want a truly clean slate:
+<details>
+<summary>Full coverage</summary>
 
-1. **Manifest** — make sure `.release-please-manifest.json` is `{ ".": "0.0.0" }` (the default).
-2. **Changelog** — delete `CHANGELOG.md` if your fresh repo somehow inherited one.
-3. **Config** — update `release-please-config.json` → `packages["."]["package-name"]` to your repo name.
-4. **Workflow permissions** — in **Settings → Actions → General → Workflow permissions**, enable **Read and write permissions** so release-please can open its PR.
-5. **Tags & releases (optional)** — if you copied the repo with history, drop old tags:
+- **Workspace** — `linear_workspace_settings`, `linear_workspace_label`, `linear_project_status`, `linear_project_label`, `linear_initiative_label`, `linear_emoji`.
+- **Teams** — `linear_team`, `linear_team_label`, `linear_team_membership`, `linear_workflow_state`, `linear_template`, `linear_triage_responsibility`, `linear_time_schedule`, `linear_email_intake_address`, `linear_agent_skill`.
+- **Git automation** — `linear_git_automation_state`, `linear_git_automation_target_branch`.
+- **Views** — `linear_custom_view`, `linear_view_preferences`.
+- **Integrations** — `linear_webhook`, `linear_integrations_settings`.
+- **Releases** — `linear_release_pipeline`, `linear_release_stage`.
+- **Customers** — `linear_customer_status`, `linear_customer_tier`. Needs Linear Customers enabled for the workspace.
+- **Data sources** — `linear_organization`, `linear_team(s)`, `linear_user(s)`, `linear_workflow_state(s)`, `linear_label(s)`, `linear_custom_view(s)`, `linear_template`.
 
-   ```bash
-   git tag -l | xargs -r git tag -d
-   ```
+</details>
 
-   …and clear any stale entries on the GitHub **Releases** tab.
+## 📚 Documentation
 
-6. **First commit** — push a Conventional Commit on `main` (`feat: …`, `fix: …`). release-please opens the initial release PR; merge it and your first tagged release ships.
-
-## 💡 Why "scaffold" and not "template-\*"
-
-Single word, brandable, language-neutral. Future stack-specific templates can sit next to it as `scaffold-laravel`, `scaffold-nuxt`, etc.
+Per-resource docs live under [`docs/`](docs/), generated from the schema with `make docs` (build + export schema + tfplugindocs).
 
 ## 🤝 Contributing
 
-PRs welcome. Conventional Commits required (enforced via commitlint). Husky runs the project's linters/formatters on `git commit`.
+PRs welcome. Conventional Commits required (enforced via commitlint). Husky runs the linters/formatters on `git commit`.
 
 > [!TIP]
-> Run `pnpm check:fix` before pushing — CI will catch what husky missed.
+> Run `make build && go vet ./...` before pushing — CI will catch what husky missed.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 

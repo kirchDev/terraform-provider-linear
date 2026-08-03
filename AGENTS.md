@@ -16,106 +16,107 @@ Retyping a change is exactly how the two drift; one reflowed line or reworded cl
 
 ## What this repo is
 
-`scaffold` is a **GitHub template repository**, not an application. It ships the meta layer (lint, format, commit hooks, CI, CodeQL, Dependabot, release-please, issue/PR templates, standard meta docs) that every new kirchDev repo should start with. There is no application code — the project code can be anything (PHP, Go, Rust, Vue, shell). Only the meta layer lives here.
+A first-party **OpenTofu / Terraform provider for [Linear](https://linear.app)**, owned by kirchDev. It manages Linear _workspace configuration_ (teams, labels, workflow states, views, git automation, webhooks, workspace settings) as code so the Linear estate can live in the same IaC workflow as the rest of the kirchDev infrastructure.
 
-Implication: when changing files, ask "does this default make sense for _every_ future repo created from this template?" — not just for one project type.
+- **Provider type (HCL):** `linear` → `provider "linear" {}`
+- **OpenTofu registry address:** `kirchdev/linear`
+- **Go module:** `github.com/kirchDev/terraform-provider-linear`
+- **SDK:** `terraform-plugin-framework` (NOT the legacy SDKv2)
+
+The repo name format `NAMESPACE/terraform-provider-NAME` is **mandatory** for the OpenTofu/Terraform registry — it's not a style choice.
+
+**Scope is workspace configuration, not issue content** — there is no `linear_issue`, `linear_project` or `linear_document` resource. `PLAN.md` carries the full in/out list and the reasoning.
+
+## Current state
+
+> [!IMPORTANT]
+> **25 resources and 12 data sources are implemented; nothing has been released or run against a real workspace.** [`PLAN.md`](PLAN.md) remains the reference for _why_ each entity is in or out of scope — read it before adding one.
+
+Two layers coexist:
+
+- **Node meta layer** (from the `scaffold` template): pnpm + oxlint + oxfmt + husky + commitlint + release-please + CI/CodeQL/Dependabot + issue/PR templates. Gates config/docs (JSON/YAML/MD).
+- **Go provider**: `internal/client/` (the GraphQL client) and `internal/provider/` (resources, data sources, the shared CRUD machinery).
+
+### How a resource file is put together
+
+Linear's mutations are strikingly regular — `xCreate(input:)`, `x(id:)`, `xUpdate(id:, input:)`, `xDelete(id:)` — so that shape is implemented once and each resource contributes only what differs:
+
+- **`graphql.go`** — `entity{name, fields, deleteVerb}` builds those four documents from a selection set. `connection()` pages through a collection query to the end.
+- **`standard_resource.go`** — `standardResource` implements Create/Read/Update/Delete/ImportState against an `entity` plus a `crudModel` (`id()`, `input(ctx, forUpdate)`, `decode(ctx, raw)`). A model that also implements `createThenUpdate` gets a follow-up update after create, for entities whose create input is narrower than their update input (`linear_team` above all).
+- **`helpers.go`** — the `put*` input builders. Their `clear` flag is the one subtlety: on **update** an attribute the user removed has to be sent as an explicit `null`, or removing it from the config is a silent no-op. Optional+Computed attributes pass `clear=false`, because for those an absent value legitimately means "keep what is live".
+- **`standard_data_source.go`** — the same idea for data sources.
+
+Resources that do not fit implement `resource.Resource` directly: `linear_workspace_settings` (a singleton with no id-based CRUD) and `linear_view_preferences` (no top-level read query — see its file).
+
+**Attributes Linear accepts but never returns** are modelled as plain `Optional` (never `Computed`) and left untouched by `decode`, with **write-only** stated in their description. Marking them Computed instead would make Terraform reject the apply, because the value it planned is not the value that comes back.
+
+## API shape (Linear GraphQL)
+
+The sibling providers (`../terraform-provider-discord`, `../terraform-provider-laravelforge`) both speak REST. **Linear does not** — this is the one place where their patterns don't transfer.
+
+- Single endpoint `https://api.linear.app/graphql`, everything is a `POST`. There are no per-resource paths, so the client exposes `Query`/`Mutate`, not `Get`/`List`/`Write`/`Delete`.
+- **Auth is `Authorization: <api key>` — no `Bearer` prefix.** A personal API key is **workspace-scoped**, which is why multi-workspace setups need one aliased provider per workspace.
+- **Errors come back as HTTP 200.** GraphQL reports failures in `errors[]`; the 404 equivalent is `extensions.type == "EntityNotFoundError"`. `NotFound()` must check that, not the status code — otherwise a `Read` never removes a deleted resource from state and the next `plan` dies at refresh.
+- **Rate limit:** 1500 requests/hour per key, reported via `X-RateLimit-Requests-Remaining`. Honour `429` + `Retry-After` and retry transient `5xx` with backoff, so resources never see either.
+- **Schema:** `bash scripts/fetch-schema.sh` pulls the full SDL (~1.2 MB, gitignored) to `.linear-schema.graphql`. That file is the field source of truth — which mutations exist, which inputs they take, what is nullable.
 
 ## Commands
 
-| Command             | What it does                                               |
-| :------------------ | :--------------------------------------------------------- |
-| `pnpm install`      | Install deps and wire husky hooks via the `prepare` script |
-| `pnpm lint`         | `oxlint . --deny-warnings`                                 |
-| `pnpm format`       | `oxfmt --check .` (note: `format` is the check, not fix)   |
-| `pnpm check`        | Runs `lint` + `format` — the CI gate                       |
-| `pnpm lint:fix`     | Auto-fix lint                                              |
-| `pnpm format:fix`   | Auto-fix format                                            |
-| `pnpm check:fix`    | Auto-fix lint + format                                     |
-| `pnpm skills:update`| Update project-scoped agent skills via the skills.sh CLI   |
-| `pnpm taze`         | Interactive dependency upgrade check                       |
-| `pnpm taze:w`       | Write upgrade results                                      |
+Go (via `GNUmakefile`; needs **Go ≥ 1.25** — `terraform-plugin-framework v1.19` requires it):
 
-There is no test suite — this is config-only. CI runs `pnpm lint` and `pnpm format` on PR.
+| Command        | What it does                                                                  |
+| :------------- | :---------------------------------------------------------------------------- |
+| `make build`   | `go build -o terraform-provider-linear`                                       |
+| `make tidy`    | `go mod tidy`                                                                 |
+| `make fmt`     | `gofmt -s -w .`                                                               |
+| `make vet`     | `go vet ./...`                                                                |
+| `make lint`    | `golangci-lint run`                                                           |
+| `make docs`    | render `docs/` from the schema (build + export + tfplugindocs)                |
+| `make test`    | `go test ./...`                                                               |
+| `make testacc` | `TF_ACC=1 go test ./...` — mock acceptance tests; needs a TF binary, no token |
 
-## Architecture / conventions
+Node meta layer: `pnpm install` (wires husky hooks), `pnpm check` / `pnpm check:fix`. CI (`.github/workflows/ci.yml`) runs a **Go job** (build·vet·gofmt·golangci-lint·test + `TF_ACC` mock acceptance tests, OpenTofu installed) and a **Lint job** (oxlint + oxfmt).
 
-- **Node 24, pnpm 11.** Pinned via `.nvmrc`, `engines`, and `packageManager`. `pnpm-workspace.yaml` enforces `minimumReleaseAge=4320` (3-day cooldown), isolated node-linker. Don't loosen these without reason.
-- **oxc, not eslint/prettier.** Linting via `oxlint`, formatting via `oxfmt`. Configs live in `.oxlintrc.json` / `.oxfmtrc.json`. `oxlint` uses `unicorn` + `oxc` plugins; rules deliberately minimal.
-- **Husky hooks** (`.husky/pre-commit`, `.husky/commit-msg`) run `lint-staged` and `commitlint`. `lint-staged.config.js` excludes `README.md`, `CLAUDE.md`, and `AGENTS.md` (free-form prose) and `pnpm-lock.yaml`. `oxlint --fix --deny-warnings` then `oxfmt` on JS; `oxfmt` only on JSON/YAML/MD.
-- **Conventional Commits enforced** via `@commitlint/config-conventional`. Don't `--no-verify` unless explicitly asked.
-- **release-please is included** (unlike many templates that omit it). Files: `release-please-config.json`, `.release-please-manifest.json`, `.github/workflows/release-please.yml`. Config uses `release-type: simple` (language-agnostic), `include-v-in-tag: true`. Downstream repos start at `0.0.0` and reset via the steps in README → _Resetting release-please_.
-- **Workflows** use `actions/checkout@v6`, `actions/setup-node@v6`, `pnpm/action-setup@v6`, `github/codeql-action/{init,analyze}@v4`. Keep these pinned to major versions; Dependabot bumps them monthly.
-- **CodeQL** scans `actions` + `javascript-typescript` with `security-extended,security-and-quality` queries, gated by path filters so non-code changes don't trigger it.
-- **Dependabot** groups all minor/patch updates per ecosystem into a single PR (`npm-minor-patch`, `actions-minor-patch`). Majors come as separate PRs.
+> [!NOTE]
+> Generated files are excluded from oxfmt via `.prettierignore` (`docs/` from tfplugindocs, `CHANGELOG.md` from release-please). Don't reformat them — the next generation undoes it.
 
-## AI & skills
-
-- **`.claude/settings.json`** ships a baseline permission policy — see _Permission policy_ below for the rules it follows. `.claude/settings.local.json` (per-machine overrides, typically `enabledMcpjsonServers`) is gitignored.
-- **`.tituskirch-skills.json`** configures the [TitusKirch skills](https://github.com/TitusKirch/skills) (commit, PR, issue, release, docs …) per repo. It is the runtime **config**, not an installer. Regenerate/reconcile it with the `tituskirch-skills-config` skill.
-- **Installing the skills.** The bundle is installed via the skills.sh CLI (`pnpm dlx skills add TitusKirch/skills`), not vendored into the repo. `pnpm skills:update` refreshes project-scoped skills tracked in `skills-lock.json` (only present once a repo actually installs project skills).
-
-## Permission policy
-
-`.claude/settings.json` is deliberately lopsided: a **long `deny` list and a short `allow` list**. The two sides answer different questions, so they follow opposite rules.
-
-**`deny` may be generous.** A rule for a command the repo doesn't have is a no-op, it never needs maintenance, and it is never reviewed — a too-broad block only surfaces when you actually hit it. So the list covers every stack kirchDev repos might grow into (Laravel, Prisma, Terraform/OpenTofu, AWS), not just this one. `git reflog expire` and `git gc --prune=now` are in there because they destroy the rescue path that survives a `reset --hard`.
-
-The line to draw is **the machine or something remote, not the working copy**. Blocked: anything that wrecks the OS (`dd`, `mkfs`, `chmod -R`, `rm -rf /…`), tears down remote state or resources (`terraform destroy`, `state rm`, `aws ec2 terminate-instances`, `gh repo delete`), or throws away work with no recovery path (force-push, `reset --hard`, `stash drop`). Deliberately *not* blocked, because they are ordinary local development: `rm -rf node_modules`, `docker volume rm`, `docker compose down -v`, `docker system prune`, `php artisan tinker`, deleting a remote branch. Those prompt instead — a command that is sometimes wanted belongs in the middle state, never in `deny`.
-
-**`allow` must stay short.** Its only return is fewer prompts — no safety is gained. Every line has to be read and understood by whoever copies this file, and an unreviewed allow list is more dangerous than none. Keep what occurs many times per session (read-only git, `ls`/`grep`/`rg`, the project's own check scripts) and let everything else ask.
-
-**Three states, not two.** A command in `allow` runs unasked; one in `deny` is impossible and has to be typed by hand; one in **neither list prompts you** — and that middle state is the right default for almost everything. Reserve `deny` for what a mistaken "yes" could not undo. A normal `git push` is not that: it is reversible, visible and the ordinary way work ships, so it sits in `allow`.
-
-> [!IMPORTANT]
-> **Never allow a rule that runs arbitrary code.** `php artisan tinker --execute`, `pnpm exec turbo run`, `find . *` (which covers `-delete` and `-exec rm`), a raw `pnpm dlx`, or an MCP tool that executes SQL (`database-query`, `run-query`) each hand back everything the `deny` list took away — a blocked `db:wipe` means nothing next to an allowed `tinker --execute 'DB::statement(...)'`. A deny list is only as strong as the weakest allow rule beside it.
-
-Two things this file cannot do, by design: it cannot tell which branch a `git push` targets (protect release branches with **branch protection**, not permissions), and prefix rules miss flags placed before the subcommand (`docker compose -f x.yml down -v`). Treat it as lowering the odds, not as a guarantee.
-
-Downstream repos keep the `deny` list as-is and swap the `pnpm` lines in `allow` for whatever their stack runs.
-
-**Codex gets the same policy** in `.codex/rules/default.rules` — permission config is not portable, so the block list exists twice and **both must be changed together**. Codex uses Starlark `prefix_rule()` calls matching on argument *tokens*, which handles flags and shell chains that the `Bash(…)` prefix patterns miss, and every rule carries its own `match`/`not_match` cases. Check a rule with:
+### Manual smoke test (loads the binary in OpenTofu)
 
 ```bash
-codex execpolicy check --pretty --rules .codex/rules/default.rules -- git push --force
+make build
+cat > /tmp/linear.tfrc <<EOF
+provider_installation {
+  dev_overrides { "kirchdev/linear" = "$(pwd)" }
+  direct {}
+}
+EOF
+TF_CLI_CONFIG_FILE=/tmp/linear.tfrc tofu -chdir=path/to/example validate
 ```
 
-## Branching model
+`validate` exercises the schema without calling the API; `plan`/`apply` would need a real `LINEAR_TOKEN`.
 
-The default here is a **`dev` integration branch**: branch off `dev`, PR into `dev`, roll `dev` up into `main`, and release-please releases from `main`. That is what most kirchDev repos run, so the template runs it too — a variant that ships switched off is a variant nobody notices is broken.
+## Patterns & gotchas
 
-> [!IMPORTANT]
-> A repo created from this template has the `dev` config but **no `dev` branch**. Create it before the first Dependabot run: with `target-branch: 'dev'` pointing at a branch that doesn't exist, Dependabot opens nothing at all. Going main-only (below) is a deliberate step too — leaving the config untouched is the one option that silently does nothing.
+- Follow the sibling providers' file conventions: one file per entity, one `*Attributes` struct, constructors `New{Camel}Resource` / `New{Camel}DataSource`, TypeName `linear_{snake}`, everything registered in `provider.go`.
+- **Deeply-nested config goes through as raw JSON** in a `*_json` attribute — `filter_json`, `template_json`, `security_settings_json`. The entities that need this (`IssueFilter` alone has 122 top-level fields, arbitrarily nested) cannot be modelled as typed HCL without freezing against a schema that moves.
+- **JSON attributes must compare semantically.** Linear normalises `filterData` server-side, so a byte comparison drifts on every plan. Use `jsontypes.Normalized` (`terraform-plugin-framework-jsontypes`), not `types.String`.
+- **`workflow_state.type` is a plain string**, not an enum: `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`, `duplicate`. The community provider's enum is exactly what makes `duplicate` unmanageable there.
+- **Git automation is one entity per event.** `GitAutomationState` carries a single `event` (`draft` / `start` / `review` / `mergeable` / `merge`). Bundling all five into one resource is what breaks `merge` round-tripping in the community provider — don't repeat it.
+- **`workspace_settings` is a singleton**: manage-not-create (Create adopts via `organizationUpdate`, Delete is a no-op). Every attribute stays `Optional + Computed`, so an undeclared field keeps its live value instead of being nulled.
 
-`.github/workflows/dev-pr.yml` opens and updates the rolling draft `dev` → `main` PR. Mark that PR ready and **merge it with a merge commit, never a squash**: squashing collapses the individual `feat:`/`fix:` commits into the PR's own `chore:` title, and release-please then cuts nothing.
+## Release & publishing
 
-Going **main-only** is three edits, all of them removals:
+- **release-please** (`.github/workflows/release-please.yml`, `release-type: go`) owns versioning + CHANGELOG + the tag + GitHub release. It runs on `main` with a **GitHub App token** minted from a Bitwarden-stored PEM — the **kirchDev-ci** mirror, not the `TitusKirch-ci` id the scaffold ships.
+- When it cuts a release (`release_created == 'true'`), a second job in the **same workflow** runs **goreleaser**: builds the cross-platform archives, **GPG-signs** the checksums (key + passphrase from Bitwarden SM) and **appends** them to the release (`release.mode: append`).
+- The registry consumes the per-platform zips + `SHA256SUMS` + detached `.sig` + `manifest.json` (protocol `6.0`, from `terraform-registry-manifest.json`).
+- The GPG key in `KEYS` is the **same** key the sibling providers use — already registered, nothing to rotate.
 
-```bash
-rm .github/workflows/dev-pr.yml
-# .github/dependabot.yml    — drop both `target-branch: 'dev'` lines
-# .tituskirch-skills.json   — set `pr.base` to "main"
-```
+## Conventions
 
-Nothing is vendored for this. A variant worth shipping as files is one that *adds* something — content that would otherwise be lost, the way `dev-pr.yml` itself would be. A variant that only deletes has nothing to preserve, so it stays documented, exactly like _Public vs private repos_ below.
+- **Conventional Commits enforced** via commitlint on `git commit`. Don't `--no-verify` unless explicitly asked.
+- **House style** for READMEs/meta files: centered hero block, prescribed section emojis (✨ 📦 🚀 🤝 🛣️ 📄), GitHub callouts (`> [!TIP]`), license footer `[MIT](LICENSE) © [Titus Kirch](https://github.com/TitusKirch/) / [IT-Dienstleistungen Titus Kirch](https://kirch.dev)`.
+- Siblings **`../terraform-provider-laravelforge`** and **`../terraform-provider-discord`** are the reference implementations of these provider conventions — check them when unsure. Everything transfers except the client (REST there, GraphQL here).
 
-`ci.yml` and `codeql.yml` list both `main` and `dev` in their `on: branches:` filters and neither edit touches them. A filter naming a branch that doesn't exist is a no-op, so it costs a main-only repo nothing — and without `dev` in `ci.yml`, PRs into `dev` (Dependabot's included) would run no CI at all.
+## Don't relitigate
 
-Variants that are *purely* deletions — see _Public vs private repos_ below — stay documented rather than vendored; only this one earns the folder.
-
-## Public vs private repos
-
-Some meta defaults only make sense for one visibility. When spinning up a repo from this template, adjust for its visibility:
-
-- **CodeQL / code scanning** (`.github/workflows/codeql.yml`) depends on GitHub Advanced Security. It's free on **public** repos; on a **private** repo without a GHAS license it won't run — delete `codeql.yml` (and the CodeQL note above) rather than leave a dead workflow. The same goes for other GHAS-gated features (secret scanning, etc.). Dependabot version updates work on both.
-- **License.** A **public** repo ships MIT: keep `LICENSE` and the `[MIT](LICENSE) © …` README footer. A **private** repo is proprietary: remove/replace `LICENSE`, drop the MIT footer, and set `package.json` to `"license": "UNLICENSED"` (keep `"private": true`).
-- **Discord forum links.** `.github/ISSUE_TEMPLATE/config.yml` points questions, ideas and possible bugs at the repo's Discord forum (each open-source repo gets one, provisioned from the `infrastructure` repo's OpenTofu). Confirmed bugs and features stay as the GitHub issue forms. A **private** repo has no forum — drop the `contact_links` block; if you still want an in-repo Q&A path, restore a simple `question.yml`.
-
-## House style for READMEs and meta files
-
-`/write-readme` skill encodes the canonical structure. Key rules: hero block wrapped in `<div align="center">`, prescribed section emojis (✨ Features, 🚀 Setup, 🤝 Contributing, 🛣️ Versioning, 📄 License), license footer always reads `[MIT](LICENSE) © [Titus Kirch](https://github.com/TitusKirch/) / [IT-Dienstleistungen Titus Kirch](https://kirch.dev)`. Use GitHub callouts (`> [!TIP]`, `> [!IMPORTANT]`), never plain blockquotes.
-
-## When editing this template
-
-- Every file referencing `TitusKirch/scaffold` is a placeholder that downstream users will replace. Keep the references consistent so a single `grep -rn "TitusKirch/scaffold"` catches them all.
-- `forgemap` (sibling repo at `../forgemap`) is the de-facto reference implementation of these conventions. When unsure about a config choice, check what forgemap does.
-- The template's own `package.json` is `"private": true` and `"name": "scaffold"` — not published anywhere.
+The decision to build our own provider rather than extend `terraform-community-providers/linear` v0.3.7 is settled. That provider covers 7 of ~25 managable entities, has no views ([PR #29](https://github.com/terraform-community-providers/terraform-provider-linear/pull/29) open since Nov 2023), models `workflow_state.type` as an enum that excludes `duplicate`, does not round-trip the `merge` git event, and exposes 11 of ~50 `organizationUpdate` fields. The full API-vs-provider gap analysis lives in `PLAN.md`.
