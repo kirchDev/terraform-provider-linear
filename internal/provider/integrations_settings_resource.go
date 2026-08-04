@@ -155,7 +155,9 @@ func integrationsSettingsSchema() schema.Schema {
 		}
 	}
 	notify := func(desc string) schema.Attribute {
-		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.BoolAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepBool(),
+		}
 	}
 
 	return schema.Schema{

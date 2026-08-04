@@ -147,7 +147,9 @@ func (m *emailIntakeAddressModel) input(_ context.Context, forUpdate bool) map[s
 
 func emailIntakeAddressSchema() schema.Schema {
 	optBool := func(desc string) schema.Attribute {
-		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.BoolAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepBool(),
+		}
 	}
 
 	return schema.Schema{
@@ -173,7 +175,7 @@ func emailIntakeAddressSchema() schema.Schema {
 					"replaces the resource, since the update mutation has no `type`.",
 				Optional:      true,
 				Computed:      true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: keepString(stringplanmodifier.RequiresReplace()),
 			},
 			"template_id": schema.StringAttribute{
 				MarkdownDescription: "UUID of the `linear_template` incoming issues are created from.",

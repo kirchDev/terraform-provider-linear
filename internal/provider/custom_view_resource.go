@@ -150,6 +150,7 @@ func customViewSchema() schema.Schema {
 			Validators: []validator.String{
 				stringvalidator.ConflictsWith(filterPaths...),
 			},
+			PlanModifiers: keepString(),
 		}
 	}
 
@@ -225,6 +226,7 @@ func customViewSchema() schema.Schema {
 				MarkdownDescription: "UUID of the user who owns the view. Defaults to whoever the API key belongs to.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 
 			"filter_json": filterAttr("Issue filter as a JSON object, e.g. " +

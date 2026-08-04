@@ -99,6 +99,7 @@ func agentSkillSchema() schema.Schema {
 				MarkdownDescription: "Title of the skill.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"body": schema.StringAttribute{
 				MarkdownDescription: "Instructions the skill carries, as Markdown.",

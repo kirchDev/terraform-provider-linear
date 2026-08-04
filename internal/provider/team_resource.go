@@ -321,16 +321,24 @@ func teamSchema() schema.Schema {
 	// one, and an attribute the config leaves out must keep its live value rather
 	// than being reset.
 	optBool := func(desc string) schema.Attribute {
-		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.BoolAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepBool(),
+		}
 	}
 	optString := func(desc string) schema.Attribute {
-		return schema.StringAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.StringAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepString(),
+		}
 	}
 	optFloat := func(desc string) schema.Attribute {
-		return schema.Float64Attribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.Float64Attribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepFloat(),
+		}
 	}
 	optInt := func(desc string) schema.Attribute {
-		return schema.Int64Attribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.Int64Attribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepInt(),
+		}
 	}
 
 	return schema.Schema{
@@ -348,6 +356,9 @@ func teamSchema() schema.Schema {
 				MarkdownDescription: "Name of the team.",
 				Required:            true,
 			},
+			// No keepString() here, deliberately: the key is derived from the
+			// name, so on a rename it really is not knowable until Linear has
+			// answered. See plan.go and derivedFromAnotherAttribute.
 			"key": schema.StringAttribute{
 				MarkdownDescription: "Team key — the prefix of every issue identifier, e.g. `ENG` in `ENG-42`. " +
 					"Linear derives one from the name when unset.",
@@ -431,9 +442,10 @@ func teamSchema() schema.Schema {
 					"`jsonencode({ labelManagement = \"admin\", templateManagement = \"member\" })`. Keys: " +
 					"`agentSkillsManagement`, `automationManagement`, `issueSharing`, `labelManagement`, " +
 					"`memberManagement`, `teamManagement`, `templateManagement`. Compared semantically.",
-				Optional:   true,
-				Computed:   true,
-				CustomType: jsontypes.NormalizedType{},
+				Optional:      true,
+				Computed:      true,
+				CustomType:    jsontypes.NormalizedType{},
+				PlanModifiers: keepString(),
 			},
 
 			// Linear accepts these on the input but does not return them on the Team

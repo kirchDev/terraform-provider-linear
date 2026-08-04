@@ -128,6 +128,7 @@ func workflowStateSchema() schema.Schema {
 				MarkdownDescription: "Sort position of the state within its category. Linear assigns one when unset.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepFloat(),
 			},
 		},
 	}

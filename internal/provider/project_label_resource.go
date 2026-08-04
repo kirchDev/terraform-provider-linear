@@ -89,6 +89,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			MarkdownDescription: "Colour of the label as a hex string, e.g. `#5e6ad2`. Linear picks one when unset.",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 		"description": schema.StringAttribute{
 			MarkdownDescription: "Description of the label.",

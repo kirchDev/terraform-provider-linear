@@ -136,8 +136,9 @@ func templateSchema() schema.Schema {
 			"sort_order": schema.Float64Attribute{
 				MarkdownDescription: "Sort position of the template in the template list. Linear assigns one " +
 					"when unset.",
-				Optional: true,
-				Computed: true,
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: keepFloat(),
 			},
 			"pipeline_id": schema.StringAttribute{
 				MarkdownDescription: "UUID of the `linear_release_pipeline` the template is bound to. Required " +
