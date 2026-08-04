@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0](https://github.com/kirchDev/terraform-provider-linear/compare/v0.1.0...v0.2.0) (2026-08-04)
+
+
+### Features
+
+* **queue:** cut the queue branch on the first worker PR ([#14](https://github.com/kirchDev/terraform-provider-linear/issues/14)) ([19802ae](https://github.com/kirchDev/terraform-provider-linear/commit/19802ae789603a65007725308031dc346bea6804))
+
+
+### Bug Fixes
+
+* **ci:** read the Queue App PEM from this owner's own -ci mirror ([0517539](https://github.com/kirchDev/terraform-provider-linear/commit/05175392b731ab2e3846bbfec381af95b3a1ba52))
+* drop issueSharingEnabled from the team selection set ([1c5d11e](https://github.com/kirchDev/terraform-provider-linear/commit/1c5d11ee5e9208af24bbe06b1e11ac84d0b47db5)), closes [#15](https://github.com/kirchDev/terraform-provider-linear/issues/15)
+* select the subfields of ipRestrictions on the workspace read ([875d278](https://github.com/kirchDev/terraform-provider-linear/commit/875d2784e825ab9a9d5957f5a65e97301fa05504)), closes [#16](https://github.com/kirchDev/terraform-provider-linear/issues/16)
+
 ## 0.1.0 (2026-08-03)
 
 
