@@ -110,8 +110,9 @@ func organizationDataSourceSchema() schema.Schema {
 				Computed:            true,
 			},
 			"roadmap_enabled": schema.BoolAttribute{
-				MarkdownDescription: "Whether roadmaps are enabled.",
-				Computed:            true,
+				MarkdownDescription: "Whether Initiatives are enabled. Linear renamed the feature to " +
+					"Initiatives; its API still calls the field `roadmapEnabled`, the name it shipped under.",
+				Computed: true,
 			},
 			"releases_enabled": schema.BoolAttribute{
 				MarkdownDescription: "Whether releases are enabled — the prerequisite for `linear_release_pipeline`.",

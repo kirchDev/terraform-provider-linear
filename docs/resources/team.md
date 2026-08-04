@@ -79,7 +79,7 @@ resource "linear_team" "engineering" {
 - `issue_estimation_allow_zero` (Boolean) Whether `0` is a valid estimate.
 - `issue_estimation_extended` (Boolean) Whether the estimation scale is extended with larger values.
 - `issue_estimation_type` (String) Estimation scale — one of `notUsed`, `exponential`, `fibonacci`, `linear`, `tShirt`.
-- `issue_sharing_enabled` (Boolean) Whether issues of this team can be shared with a public link.
+- `issue_sharing_enabled` (Boolean) Whether issues of this team can be shared with a public link. **Write-only**: `TeamCreateInput` and `TeamUpdateInput` both take it, but the team does not expose it, so drift in this attribute cannot be detected. Not to be confused with the `issueSharing` key of `security_settings_json`, which is the role allowed to share rather than whether sharing is on at all.
 - `join_by_default` (Boolean) Whether new workspace members join this team automatically.
 - `key` (String) Team key — the prefix of every issue identifier, e.g. `ENG` in `ENG-42`. Linear derives one from the name when unset.
 - `parent_id` (String) UUID of the parent team this team nests under.

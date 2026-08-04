@@ -77,7 +77,7 @@ resource "linear_workspace_settings" "this" {
 - `initiative_update_reminder_frequency_in_weeks` (Number) How many weeks between initiative update reminders.
 - `initiative_update_reminders_day` (String) Weekday initiative update reminders go out.
 - `initiative_update_reminders_hour` (Number) Hour of day initiative update reminders go out, 0–23.
-- `ip_restrictions_json` (String) IP restrictions as a JSON array, e.g. `jsonencode([{ range = "203.0.113.0/24", type = "allow", enabled = true }])`.
+- `ip_restrictions_json` (String) IP restrictions as a JSON array, e.g. `jsonencode([{ range = "203.0.113.0/24", type = "allow", enabled = true }])`. Each entry takes `range`, `type` and `enabled`, plus an optional `description`. Compared semantically, and an entry without a description is read back without the key.
 - `linear_agent_enabled` (Boolean) Whether the Linear agent is enabled.
 - `linear_agent_settings_json` (String) Linear agent settings as a JSON object.
 - `logo_url` (String) URL of the workspace logo.
@@ -90,7 +90,7 @@ resource "linear_workspace_settings" "this" {
 - `pull_request_tour_enabled` (Boolean) Whether the pull request tour is shown.
 - `reduced_personal_information` (Boolean) Whether Linear minimises the personal information it stores. **Write-only**, for the same reason as `sla_enabled`.
 - `restrict_agent_invocation_to_members` (Boolean) Whether only workspace members — not guests — may invoke agents.
-- `roadmap_enabled` (Boolean) Whether roadmaps are available in the workspace.
+- `roadmap_enabled` (Boolean) Whether Initiatives are available in the workspace. Linear renamed the feature to Initiatives; its API still calls the field `roadmapEnabled`, the name it shipped under. This is the workspace-level toggle — `linear_team.initiatives_enabled` is the per-team one.
 - `security_settings_json` (String) Workspace security settings as a JSON object — this is where member invitation, team creation and label management restrictions live now, e.g. `jsonencode({ allowMembersToInvite = false, restrictTeamCreationToAdmins = true })`. Compared semantically.
 - `sla_enabled` (Boolean) Whether SLAs are enabled. **Write-only** — Linear accepts it but does not report it back, so drift in this attribute cannot be detected.
 - `slack_auto_create_project_channel` (Boolean) Whether a Slack channel is created for every new project.
