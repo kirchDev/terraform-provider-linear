@@ -29,7 +29,7 @@ var teamEntity = entity{
 		triageEnabled requirePriorityToLeaveTriage
 		autoArchivePeriod autoClosePeriod autoCloseStateId autoCloseParentIssues autoCloseChildIssues
 		defaultIssueEstimate issueEstimationType issueEstimationAllowZero issueEstimationExtended
-		groupIssueHistory issueSharingEnabled setIssueSortOrderOnStateChange initiativesEnabled
+		groupIssueHistory setIssueSortOrderOnStateChange initiativesEnabled
 		inheritIssueEstimation inheritWorkflowStatuses inheritSlackAutoCreateProjectChannel
 		slackAutoCreateProjectChannel aiThreadSummariesEnabled aiDiscussionSummariesEnabled
 		allMembersCanJoin joinByDefault securitySettings
@@ -82,7 +82,6 @@ type teamAttributes struct {
 	IssueEstimationExtended  bool    `json:"issueEstimationExtended"`
 
 	GroupIssueHistory              bool   `json:"groupIssueHistory"`
-	IssueSharingEnabled            bool   `json:"issueSharingEnabled"`
 	SetIssueSortOrderOnStateChange string `json:"setIssueSortOrderOnStateChange"`
 	InitiativesEnabled             bool   `json:"initiativesEnabled"`
 
@@ -141,7 +140,6 @@ type teamModel struct {
 	IssueEstimationExtended  types.Bool    `tfsdk:"issue_estimation_extended"`
 
 	GroupIssueHistory              types.Bool   `tfsdk:"group_issue_history"`
-	IssueSharingEnabled            types.Bool   `tfsdk:"issue_sharing_enabled"`
 	SetIssueSortOrderOnStateChange types.String `tfsdk:"set_issue_sort_order_on_state_change"`
 	InitiativesEnabled             types.Bool   `tfsdk:"initiatives_enabled"`
 
@@ -165,6 +163,7 @@ type teamModel struct {
 
 	// Write-only: Linear accepts these on the input but does not expose them on
 	// the Team type, so there is nothing to read back.
+	IssueSharingEnabled             types.Bool   `tfsdk:"issue_sharing_enabled"`
 	ProductIntelligenceScope        types.String `tfsdk:"product_intelligence_scope"`
 	InheritProductIntelligenceScope types.Bool   `tfsdk:"inherit_product_intelligence_scope"`
 }
@@ -210,7 +209,6 @@ func (m *teamModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.IssueEstimationExtended = types.BoolValue(a.IssueEstimationExtended)
 
 	m.GroupIssueHistory = types.BoolValue(a.GroupIssueHistory)
-	m.IssueSharingEnabled = types.BoolValue(a.IssueSharingEnabled)
 	m.SetIssueSortOrderOnStateChange = types.StringValue(a.SetIssueSortOrderOnStateChange)
 	m.InitiativesEnabled = types.BoolValue(a.InitiativesEnabled)
 
@@ -286,7 +284,6 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 	putBool(in, "issueEstimationExtended", m.IssueEstimationExtended, false)
 
 	putBool(in, "groupIssueHistory", m.GroupIssueHistory, false)
-	putBool(in, "issueSharingEnabled", m.IssueSharingEnabled, false)
 	putString(in, "setIssueSortOrderOnStateChange", m.SetIssueSortOrderOnStateChange, false)
 	putBool(in, "initiativesEnabled", m.InitiativesEnabled, false)
 
@@ -299,6 +296,9 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 	putString(in, "defaultTemplateForMembersId", m.DefaultTemplateForMembersID, forUpdate)
 	putString(in, "defaultTemplateForNonMembersId", m.DefaultTemplateForNonMembersID, forUpdate)
 
+	// Write-only: on both team inputs, on neither the Team type nor the
+	// selection set above.
+	putBool(in, "issueSharingEnabled", m.IssueSharingEnabled, false)
 	putString(in, "productIntelligenceScope", m.ProductIntelligenceScope, false)
 	putBool(in, "inheritProductIntelligenceScope", m.InheritProductIntelligenceScope, false)
 
@@ -390,8 +390,7 @@ func teamSchema() schema.Schema {
 			"issue_estimation_allow_zero": optBool("Whether `0` is a valid estimate."),
 			"issue_estimation_extended":   optBool("Whether the estimation scale is extended with larger values."),
 
-			"group_issue_history":   optBool("Whether the issue history groups consecutive changes by the same author."),
-			"issue_sharing_enabled": optBool("Whether issues of this team can be shared with a public link."),
+			"group_issue_history": optBool("Whether the issue history groups consecutive changes by the same author."),
 			"set_issue_sort_order_on_state_change": optString("Where an issue lands in the new state's list when " +
 				"its state changes — `top`, `bottom` or `noChange`."),
 			"initiatives_enabled": optBool("Whether the team's projects can belong to initiatives."),
@@ -441,6 +440,14 @@ func teamSchema() schema.Schema {
 			// type, so there is nothing to refresh them against. They are plain
 			// Optional (not Computed): state keeps whatever the config declared, and
 			// a change outside Terraform goes unnoticed.
+			"issue_sharing_enabled": schema.BoolAttribute{
+				MarkdownDescription: "Whether issues of this team can be shared with a public link. " +
+					"**Write-only**: `TeamCreateInput` and `TeamUpdateInput` both take it, but the team does not " +
+					"expose it, so drift in this attribute cannot be detected. Not to be confused with the " +
+					"`issueSharing` key of `security_settings_json`, which is the role allowed to share rather than " +
+					"whether sharing is on at all.",
+				Optional: true,
+			},
 			"product_intelligence_scope": schema.StringAttribute{
 				MarkdownDescription: "Scope product intelligence data is shared across — `none`, `team`, " +
 					"`teamHierarchy` or `workspace`. **Write-only**: Linear accepts it on the team input but does " +
