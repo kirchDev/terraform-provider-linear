@@ -65,6 +65,11 @@ type standardResource struct {
 	schema func() schema.Schema
 	// newModel returns a zero state model to decode plan and state into.
 	newModel func() crudModel
+	// readFn replaces the x(id:) read for an entity Linear exposes no root query
+	// for. Such an entity is only reachable through a parent, so this takes the
+	// state model rather than the bare id — the parent's id is in there too. Nil
+	// means the standard read, which is all but one of them.
+	readFn func(ctx context.Context, c *client.Client, m crudModel) (json.RawMessage, error)
 	// deleteMsg overrides the delete diagnostic summary for entities Linear
 	// archives rather than deletes.
 	deleteMsg string
@@ -130,8 +135,8 @@ func (r *standardResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	var raw json.RawMessage
-	if err := r.entity.read(ctx, r.client, state.id(), &raw); err != nil {
+	raw, err := r.read(ctx, state)
+	if err != nil {
 		// Linear reports a missing entity as EntityNotFoundError inside an HTTP
 		// 200. Dropping it from state here is what keeps the next plan from dying
 		// at refresh.
@@ -147,6 +152,19 @@ func (r *standardResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
+}
+
+// read fetches the entity behind a state model — through readFn where the entity
+// has one, and through the top-level x(id:) query otherwise.
+func (r *standardResource) read(ctx context.Context, state crudModel) (json.RawMessage, error) {
+	if r.readFn != nil {
+		return r.readFn(ctx, r.client, state)
+	}
+	var raw json.RawMessage
+	if err := r.entity.read(ctx, r.client, state.id(), &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
 
 func (r *standardResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

@@ -124,13 +124,7 @@ func (e entity) mutateInto(ctx context.Context, c *client.Client, doc string, va
 func decodeField(obj map[string]json.RawMessage, field string, out any) error {
 	raw, ok := obj[field]
 	if !ok || string(raw) == "null" {
-		return &client.APIError{
-			Operation: field,
-			Errors: []client.GraphQLError{{
-				Message:   fmt.Sprintf("%s not found", field),
-				Extension: map[string]any{"type": "EntityNotFoundError"},
-			}},
-		}
+		return notFoundError(field)
 	}
 	if out == nil {
 		return nil
@@ -139,6 +133,21 @@ func decodeField(obj map[string]json.RawMessage, field string, out any) error {
 		return fmt.Errorf("decoding %s: %w", field, err)
 	}
 	return nil
+}
+
+// notFoundError is what a read answers with when the entity is not there. It is
+// shaped like Linear's own EntityNotFoundError, because that is what NotFound
+// looks for and what makes Read drop the resource from state rather than fail
+// the plan. A read that has to search for its entity — one Linear exposes no
+// root query for — raises it itself, having searched and not found it.
+func notFoundError(field string) error {
+	return &client.APIError{
+		Operation: field,
+		Errors: []client.GraphQLError{{
+			Message:   fmt.Sprintf("%s not found", field),
+			Extension: map[string]any{"type": "EntityNotFoundError"},
+		}},
+	}
 }
 
 // connection runs a paginated collection query and decodes every node into out
