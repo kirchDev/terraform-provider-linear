@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.0...v0.2.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* read a git automation state through its team ([8b5e258](https://github.com/kirchDev/terraform-provider-linear/commit/8b5e2582bb329a43d30ec1b62def151c304d15a3)), closes [#18](https://github.com/kirchDev/terraform-provider-linear/issues/18)
+
 ## [0.2.0](https://github.com/kirchDev/terraform-provider-linear/compare/v0.1.0...v0.2.0) (2026-08-04)
 
 
