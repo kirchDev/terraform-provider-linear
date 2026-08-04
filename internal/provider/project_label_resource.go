@@ -61,9 +61,11 @@ func (m *projectLabelModel) decode(_ context.Context, raw json.RawMessage) error
 
 func (m *projectLabelModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
+	// Optional + Computed throughout, so clear=false: an attribute the
+	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "parentId", m.ParentID, forUpdate)
+	putString(in, "description", m.Description, false)
+	putString(in, "parentId", m.ParentID, false)
 	if !forUpdate {
 		putBool(in, "isGroup", m.IsGroup, false)
 		putString(in, "teamId", m.TeamID, false)
@@ -93,6 +95,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 		"description": schema.StringAttribute{
 			MarkdownDescription: "Description of the label.",
 			Optional:            true,
+			Computed:            true,
 		},
 		"is_group": schema.BoolAttribute{
 			MarkdownDescription: "Whether the label is a group other labels nest under. Changing this replaces " +
@@ -105,6 +108,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 		"parent_id": schema.StringAttribute{
 			MarkdownDescription: "UUID of the parent label group this label nests under.",
 			Optional:            true,
+			Computed:            true,
 		},
 	}
 
@@ -115,6 +119,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			MarkdownDescription: "UUID of the team the label is scoped to. Leave unset for a workspace-wide " +
 				"label. Changing it replaces the label — the update mutation has no `teamId`.",
 			Optional:      true,
+			Computed:      true,
 			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 		}
 	}

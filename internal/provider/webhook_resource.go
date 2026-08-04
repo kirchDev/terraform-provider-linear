@@ -79,7 +79,7 @@ func (m *webhookModel) decode(ctx context.Context, raw json.RawMessage) error {
 
 func (m *webhookModel) input(ctx context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"url": m.URL.ValueString()}
-	putString(in, "label", m.Label, forUpdate)
+	putString(in, "label", m.Label, false)
 	putBool(in, "enabled", m.Enabled, false)
 	putString(in, "secret", m.Secret, false)
 	_ = putStringSet(ctx, in, "resourceTypes", m.ResourceTypes, false)
@@ -110,6 +110,7 @@ func webhookSchema() schema.Schema {
 			"label": schema.StringAttribute{
 				MarkdownDescription: "Label identifying the webhook in the Linear UI.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"enabled": schema.BoolAttribute{
 				MarkdownDescription: "Whether the webhook fires. Linear disables a webhook itself after repeated " +
@@ -128,6 +129,7 @@ func webhookSchema() schema.Schema {
 				MarkdownDescription: "UUID of the team the webhook is scoped to. Leave unset together with " +
 					"`all_public_teams` for a workspace-wide webhook. Changing it replaces the webhook.",
 				Optional:      true,
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"all_public_teams": schema.BoolAttribute{

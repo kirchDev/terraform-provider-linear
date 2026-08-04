@@ -68,7 +68,7 @@ func (m *customerTierModel) input(_ context.Context, forUpdate bool) map[string]
 	in := map[string]any{"color": m.Color.ValueString()}
 	putString(in, "name", m.Name, false)
 	putString(in, "displayName", m.DisplayName, false)
-	putString(in, "description", m.Description, forUpdate)
+	putString(in, "description", m.Description, false)
 	putFloat(in, "position", m.Position, false)
 	return in
 }
@@ -99,6 +99,7 @@ func customerTierSchema() schema.Schema {
 			"description": schema.StringAttribute{
 				MarkdownDescription: "Description of what the tier represents.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the tier indicator as a hex string, e.g. `#f2c94c`.",
