@@ -12,10 +12,14 @@ resource "linear_workspace_settings" "this" {
   customers_enabled = true
 
   # Member invitation, team creation and label management restrictions live in
-  # security settings — Linear moved them off the top level.
+  # security settings — Linear moved them off the top level. Each value is the
+  # minimum role the setting requires, never a boolean: "user" leaves it to
+  # every workspace member, "admin" restricts it to admins.
   security_settings_json = jsonencode({
-    allowMembersToInvite            = false
-    restrictTeamCreationToAdmins    = true
-    restrictLabelManagementToAdmins = true
+    invitationsRole        = "user"
+    teamCreationRole       = "admin"
+    labelManagementRole    = "user"
+    templateManagementRole = "user"
+    personalApiKeysRole    = "admin"
   })
 }
