@@ -47,6 +47,11 @@ type exposedType struct {
 	typeName string
 	// fields is every field the type exposes.
 	fields map[string]bool
+	// composite maps each field whose own type is not a scalar to that type,
+	// e.g. "ipRestrictions" → "[OrganizationIpRestriction!]". Selecting one of
+	// these bare, as if it were a scalar, is the second way a selection set can
+	// be invalid.
+	composite map[string]string
 }
 
 // expose registers the fields a Linear type actually has, so every selection of
@@ -60,17 +65,28 @@ type exposedType struct {
 // exactly that shape can reach a release with every test passing.
 //
 // fields is whitespace-separated, in the same shape a resource writes its
-// selection set. An entity nobody registers is not validated, so this changes
-// nothing for the tests that do not opt in.
+// selection set. A field written `name{Type}` is one whose type is not a scalar:
+// GraphQL rejects a bare selection of it just as firmly as it rejects a field
+// that does not exist, and with a different message, so the two are registered
+// and reported apart. An entity nobody registers is not validated, so this
+// changes nothing for the tests that do not opt in.
 func (m *linearMock) expose(entity, typeName, fields string) {
-	set := map[string]bool{}
+	exposed := exposedType{
+		typeName:  typeName,
+		fields:    map[string]bool{},
+		composite: map[string]string{},
+	}
 	for _, f := range strings.Fields(fields) {
-		set[f] = true
+		name, fieldType, isComposite := strings.Cut(f, "{")
+		exposed.fields[name] = true
+		if isComposite {
+			exposed.composite[name] = strings.TrimSuffix(fieldType, "}")
+		}
 	}
 	if m.exposes == nil {
 		m.exposes = map[string]exposedType{}
 	}
-	m.exposes[entity] = exposedType{typeName: typeName, fields: set}
+	m.exposes[entity] = exposed
 }
 
 func newLinearMock() *linearMock {
@@ -110,12 +126,11 @@ func (m *linearMock) handle(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if field, typeName, ok := m.unknownSelection(req.Query); ok {
+	if message, ok := m.invalidSelection(req.Query); ok {
 		// Deliberately not an EntityNotFoundError: a query the schema rejects has
 		// to reach the practitioner as a failure, not be mistaken for a deleted
 		// resource and silently dropped from state.
-		m.writeError(w, "GRAPHQL_VALIDATION_FAILED",
-			fmt.Sprintf("Cannot query field %q on type %q.", field, typeName))
+		m.writeError(w, "GRAPHQL_VALIDATION_FAILED", message)
 		return
 	}
 
@@ -155,9 +170,12 @@ func mockOperationName(doc string) string {
 	return ""
 }
 
-// unknownSelection reports the first field a document selects that the type it
-// selects on does not expose, for every entity expose registered.
-func (m *linearMock) unknownSelection(doc string) (field, typeName string, found bool) {
+// invalidSelection reports the GraphQL validation error the real endpoint would
+// answer a document with, for every entity expose registered — the first field
+// the type it selects on does not have, or the first composite field selected
+// without a selection set of its own. The message is the one Linear sends,
+// because that is what a practitioner reads out of the failed plan.
+func (m *linearMock) invalidSelection(doc string) (message string, found bool) {
 	// Drop the operation definition, so an operation named after its entity —
 	// `query team($id: String!)` — is not itself read as a selection of it.
 	body := doc
@@ -169,20 +187,25 @@ func (m *linearMock) unknownSelection(doc string) (field, typeName string, found
 	for entity := range m.exposes {
 		entities = append(entities, entity)
 	}
-	// Sorted so a document with several unknown fields always names the same one.
+	// Sorted so a document with several invalid fields always names the same one.
 	sort.Strings(entities)
 
 	for _, entity := range entities {
 		exposed := m.exposes[entity]
 		for _, block := range selectionBlocks(body, entity) {
 			for _, f := range selectedFields(block) {
-				if !exposed.fields[f] {
-					return f, exposed.typeName, true
+				switch {
+				case !exposed.fields[f.name]:
+					return fmt.Sprintf("Cannot query field %q on type %q.", f.name, exposed.typeName), true
+				case exposed.composite[f.name] != "" && !f.selection:
+					return fmt.Sprintf(
+						"Field %q of type %q must have a selection of subfields. Did you mean %q { ... }?",
+						f.name, exposed.composite[f.name], f.name), true
 				}
 			}
 		}
 	}
-	return "", "", false
+	return "", false
 }
 
 // selectionBlocks returns the body of every selection set the field `name`
@@ -215,11 +238,19 @@ func selectionBlocks(doc, name string) []string {
 	return blocks
 }
 
+// selectedField is one field a selection block asks for.
+type selectedField struct {
+	name string
+	// selection reports whether the field brought a selection set of its own —
+	// `x { … }` rather than a bare `x`. A composite field must; a scalar cannot.
+	selection bool
+}
+
 // selectedFields returns the fields a selection block asks for at its own level.
 // A nested selection contributes its own name only — `parent { id }` selects
 // `parent` on this type and `id` on another one, which this mock does not model.
-func selectedFields(block string) []string {
-	var fields []string
+func selectedFields(block string) []selectedField {
+	var fields []selectedField
 	for i := 0; i < len(block); {
 		switch c := block[i]; {
 		case c == '{':
@@ -231,7 +262,16 @@ func selectedFields(block string) []string {
 			for j < len(block) && identPart(block[j]) {
 				j++
 			}
-			fields = append(fields, block[i:j])
+			// Arguments sit between the name and its selection set —
+			// `labels(first: 50) { … }` — so step over them before looking.
+			k := skipSpace(block, j)
+			if k < len(block) && block[k] == '(' {
+				k = skipSpace(block, skipBalanced(block, k, '(', ')'))
+			}
+			fields = append(fields, selectedField{
+				name:      block[i:j],
+				selection: k < len(block) && block[k] == '{',
+			})
 			i = j
 		default:
 			i++
@@ -296,6 +336,25 @@ func (m *linearMock) only(t *testing.T, name string) map[string]any {
 	return nil
 }
 
+// seedSingleton pre-stores the one entity of a kind that exists without anyone
+// having created it. The workspace is Linear's: there is no organizationCreate,
+// `query organization` takes no id, and organizationUpdate updates whatever the
+// API key points at. Entities are keyed by the id in the variables, so a
+// document that sends none looks up the empty key — which is where this puts it.
+func (m *linearMock) seedSingleton(name string, fields map[string]any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	stored := map[string]any{}
+	for k, v := range fields {
+		stored[k] = v
+	}
+	if m.entities[name] == nil {
+		m.entities[name] = map[string]map[string]any{}
+	}
+	m.entities[name][""] = stored
+}
+
 func (m *linearMock) create(w http.ResponseWriter, name string, req mockRequest) {
 	input, _ := req.Variables["input"].(map[string]any)
 
@@ -349,7 +408,12 @@ func (m *linearMock) store(name, id string, input, existing map[string]any) map[
 	for k, v := range existing {
 		stored[k] = v
 	}
-	stored["id"] = id
+	// A singleton is stored under the empty key, because the documents that read
+	// and update it carry no id — but it still has one of its own, and that must
+	// survive an update rather than be overwritten with the key.
+	if id != "" {
+		stored["id"] = id
+	}
 
 	for key, value := range input {
 		if value == nil {
