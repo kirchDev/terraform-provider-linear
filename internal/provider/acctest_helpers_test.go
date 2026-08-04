@@ -25,6 +25,56 @@ import (
 // removed with xDelete(id:) or xArchive(id:), so one handler covers all of them
 // without a per-entity mock.
 
+// queryTypeFields is what `type Query` exposes, copied from Linear's own SDL —
+// `bash scripts/fetch-schema.sh`, then:
+//
+//	awk '/^type Query \{/,/^\}/' .linear-schema.graphql |
+//	  grep -E '^  [a-zA-Z]+(\(|:)' | sed 's/(.*//;s/:.*//'
+//
+// It lives here rather than beside one test because it belongs to no entity: it
+// is the list of doors into the API, and any resource's read may be knocking on
+// one that is not there. Pass it to exposeRoot("query", "Query", …).
+//
+// Read it for what is absent as much as for what is present — there is a `team`
+// and a `teams`, and nothing for a git automation state at all.
+const queryTypeFields = `
+	administrableTeams agentActivities agentActivity agentSession agentSessionSandbox
+	agentSessions agentSkill agentSkills applicationInfo archivedIntegrations
+	archivedTeams attachment attachmentIssue attachmentSources attachments
+	attachmentsForURL auditEntries auditEntryTypes authenticationSessions availableUsers
+	comment comments customView customViewDetailsSuggestion customViewHasSubscribers
+	customViews customer customerNeed customerNeeds customerStatus customerStatuses
+	customerTier customerTiers customers cycle cycles diff document
+	documentContentHistory documentContentHistoryEntries documentContentHistoryTimeline
+	documents emailIntakeAddress emoji emojis entityExternalLink externalUser
+	externalUsers failuresForOauthWebhooks favorite favorites fetchData initiative
+	initiativeFilterSuggestion initiativeLabel initiativeLabels
+	initiativeLeadTeamChangeImpact initiativeRelation initiativeRelations
+	initiativeToProject initiativeToProjects initiativeUpdate initiativeUpdates
+	initiatives integration integrationHasScopes integrationTemplate integrationTemplates
+	integrations integrationsSettings issue issueFigmaFileKeySearch issueFilterSuggestion
+	issueImportCheckCSV issueImportCheckSync issueImportJqlCheck issueLabel issueLabels
+	issuePriorityValues issueRelation issueRelations issueRepositorySuggestions
+	issueSearch issueTitleSuggestionFromCustomerRequest issueToRelease issueToReleases
+	issueVcsBranchSearch issues latestReleaseByAccessKey microsoftTeamsChannels
+	notification notificationSubscription notificationSubscriptions notifications
+	notificationsUnreadCount oauthApplication oauthApplications organization
+	organizationDomainClaimRequest organizationExists organizationInvite
+	organizationInviteDetails organizationInvites organizationMeta partnerOfferDetails
+	partnerOfferWorkspaces project projectFilterSuggestion projectLabel projectLabels
+	projectMilestone projectMilestones projectRelation projectRelations projectStatus
+	projectStatusProjectCount projectStatuses projectUpdate projectUpdates projects
+	pushSubscriptionTest rateLimitStatus recentReleasesByAccessKey release releaseNote
+	releaseNotes releasePipeline releasePipelineByAccessKey releasePipelines
+	releaseSearch releaseStage releaseStages releases roadmap roadmapToProject
+	roadmapToProjects roadmaps searchDocuments searchIssues searchProjects semanticSearch
+	slaConfigurations ssoUrlFromEmail team teamMembership teamMemberships teams template
+	templates templatesForIntegration timeSchedule timeSchedules triageResponsibilities
+	triageResponsibility user userSessions userSettings users
+	verifyGitHubEnterpriseServerInstallation viewer webhook webhooks workflowState
+	workflowStates
+`
+
 type linearMock struct {
 	mu sync.Mutex
 	// entities maps entity name → id → stored fields, in the shape a read
@@ -39,6 +89,9 @@ type linearMock struct {
 	// exposes maps entity name → the type it selects on, for the entities whose
 	// selection set should be validated. See expose.
 	exposes map[string]exposedType
+	// roots maps operation keyword ("query" / "mutation") → the root type its
+	// outermost selection is validated against. See exposeRoot.
+	roots map[string]exposedType
 }
 
 // exposedType is one Linear type's readable surface.
@@ -71,6 +124,33 @@ type exposedType struct {
 // and reported apart. An entity nobody registers is not validated, so this
 // changes nothing for the tests that do not opt in.
 func (m *linearMock) expose(entity, typeName, fields string) {
+	if m.exposes == nil {
+		m.exposes = map[string]exposedType{}
+	}
+	m.exposes[entity] = newExposedType(typeName, fields)
+}
+
+// exposeRoot registers the fields Query or Mutation itself has, so the field a
+// document *enters* through is checked as well.
+//
+// expose answers "does this type have the fields the provider selects on it";
+// this answers "is there a field here to select on at all". They are the two
+// halves of one question, and the second half is the one that catches an entity
+// read through a path the schema does not have — a selection set can be perfect
+// and still be hung off a root field that was never there, which no amount of
+// checking the type it selects on will notice.
+//
+// operation is the keyword the document opens with, "query" or "mutation".
+func (m *linearMock) exposeRoot(operation, typeName, fields string) {
+	if m.roots == nil {
+		m.roots = map[string]exposedType{}
+	}
+	m.roots[operation] = newExposedType(typeName, fields)
+}
+
+// newExposedType parses one type's field list, in the whitespace-separated shape
+// expose and exposeRoot both take.
+func newExposedType(typeName, fields string) exposedType {
 	exposed := exposedType{
 		typeName:  typeName,
 		fields:    map[string]bool{},
@@ -83,10 +163,7 @@ func (m *linearMock) expose(entity, typeName, fields string) {
 			exposed.composite[name] = strings.TrimSuffix(fieldType, "}")
 		}
 	}
-	if m.exposes == nil {
-		m.exposes = map[string]exposedType{}
-	}
-	m.exposes[entity] = exposed
+	return exposed
 }
 
 func newLinearMock() *linearMock {
@@ -171,16 +248,26 @@ func mockOperationName(doc string) string {
 }
 
 // invalidSelection reports the GraphQL validation error the real endpoint would
-// answer a document with, for every entity expose registered — the first field
-// the type it selects on does not have, or the first composite field selected
-// without a selection set of its own. The message is the one Linear sends,
-// because that is what a practitioner reads out of the failed plan.
+// answer a document with, for every type expose and exposeRoot registered — the
+// first field the type it selects on does not have, or the first composite field
+// selected without a selection set of its own. The message is the one Linear
+// sends, because that is what a practitioner reads out of the failed plan.
 func (m *linearMock) invalidSelection(doc string) (message string, found bool) {
-	// Drop the operation definition, so an operation named after its entity —
-	// `query team($id: String!)` — is not itself read as a selection of it.
-	body := doc
-	if i := strings.Index(body, "{"); i >= 0 {
-		body = body[i:]
+	// The operation definition is dropped with the outer braces, so an operation
+	// named after its entity — `query team($id: String!)` — is not itself read as
+	// a selection of it.
+	root, ok := rootBlock(doc)
+	if !ok {
+		return "", false
+	}
+
+	// The root field is a field of Query or Mutation, which are types like any
+	// other: `{ gitAutomationState(id: $id) { … } }` is invalid the moment Query
+	// has no such field, however well-formed everything inside it is.
+	if exposed, registered := m.roots[documentOperation(doc)]; registered {
+		if message, found := invalidFields(root, exposed); found {
+			return message, true
+		}
 	}
 
 	entities := make([]string, 0, len(m.exposes))
@@ -192,20 +279,57 @@ func (m *linearMock) invalidSelection(doc string) (message string, found bool) {
 
 	for _, entity := range entities {
 		exposed := m.exposes[entity]
-		for _, block := range selectionBlocks(body, entity) {
-			for _, f := range selectedFields(block) {
-				switch {
-				case !exposed.fields[f.name]:
-					return fmt.Sprintf("Cannot query field %q on type %q.", f.name, exposed.typeName), true
-				case exposed.composite[f.name] != "" && !f.selection:
-					return fmt.Sprintf(
-						"Field %q of type %q must have a selection of subfields. Did you mean %q { ... }?",
-						f.name, exposed.composite[f.name], f.name), true
-				}
+		for _, block := range selectionBlocks(root, entity) {
+			if message, found := invalidFields(block, exposed); found {
+				return message, true
 			}
 		}
 	}
 	return "", false
+}
+
+// invalidFields reports the first field of a selection block that the type it is
+// asked of would reject.
+func invalidFields(block string, exposed exposedType) (message string, found bool) {
+	for _, f := range selectedFields(block) {
+		switch {
+		case !exposed.fields[f.name]:
+			return fmt.Sprintf("Cannot query field %q on type %q.", f.name, exposed.typeName), true
+		case exposed.composite[f.name] != "" && !f.selection:
+			return fmt.Sprintf(
+				"Field %q of type %q must have a selection of subfields. Did you mean %q { ... }?",
+				f.name, exposed.composite[f.name], f.name), true
+		}
+	}
+	return "", false
+}
+
+// rootBlock returns the contents of a document's outermost selection set — what
+// it asks of Query or Mutation itself.
+func rootBlock(doc string) (string, bool) {
+	i := strings.Index(doc, "{")
+	if i < 0 {
+		return "", false
+	}
+	end := skipBalanced(doc, i, '{', '}')
+	if end <= i+1 {
+		return "", false
+	}
+	return doc[i+1 : end-1], true
+}
+
+// documentOperation returns the keyword a document opens with — "query" or
+// "mutation" — which is the root type its outermost selection belongs to.
+func documentOperation(doc string) string {
+	fields := strings.Fields(doc)
+	if len(fields) == 0 {
+		return ""
+	}
+	switch fields[0] {
+	case "query", "mutation":
+		return fields[0]
+	}
+	return ""
 }
 
 // selectionBlocks returns the body of every selection set the field `name`
@@ -344,15 +468,31 @@ func (m *linearMock) only(t *testing.T, name string) map[string]any {
 func (m *linearMock) seedSingleton(name string, fields map[string]any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.put(name, "", fields)
+}
 
+// seed pre-stores an entity a configuration refers to but never creates — the
+// team a git automation rule hangs off, say, which the configuration names by
+// UUID. An entity reachable only through its parent needs that parent to be
+// there, so a test that reads one has to stand it up.
+func (m *linearMock) seed(name, id string, fields map[string]any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.put(name, id, fields)
+}
+
+func (m *linearMock) put(name, id string, fields map[string]any) {
 	stored := map[string]any{}
 	for k, v := range fields {
 		stored[k] = v
 	}
+	if id != "" {
+		stored["id"] = id
+	}
 	if m.entities[name] == nil {
 		m.entities[name] = map[string]map[string]any{}
 	}
-	m.entities[name][""] = stored
+	m.entities[name][id] = stored
 }
 
 func (m *linearMock) create(w http.ResponseWriter, name string, req mockRequest) {
@@ -383,6 +523,10 @@ func (m *linearMock) update(w http.ResponseWriter, name string, req mockRequest)
 }
 
 func (m *linearMock) read(w http.ResponseWriter, name string, req mockRequest) {
+	if m.readConnection(w, req) {
+		return
+	}
+
 	id, _ := req.Variables["id"].(string)
 	stored := m.entities[name][id]
 	if stored == nil {
@@ -392,6 +536,114 @@ func (m *linearMock) read(w http.ResponseWriter, name string, req mockRequest) {
 		return
 	}
 	m.writeData(w, map[string]any{name: stored})
+}
+
+// readConnection answers a collection read out of the stored entities, in the
+// two shapes this provider sends: `xs { nodes { … } }` asked of Query directly,
+// and `parent(id:) { xs { nodes { … } } }`, where the collection hangs off the
+// parent that scopes it. Linear reaches some entities only that second way — a
+// git automation rule has no root query of its own — so a mock that answers
+// x(id:) and nothing else cannot exercise their read path at all.
+//
+// The parent itself is not looked up: what scopes the children is the reference
+// each of them stores, and a test that never created the parent is not thereby
+// saying it does not exist.
+//
+// Everything comes back in one page. Pagination is the client's contract with
+// the API, and what this checks is that the client honours `hasNextPage` rather
+// than assuming a page it did not read is empty.
+//
+// It reports false for a document that is not connection-shaped, leaving the
+// id-based read to answer it.
+func (m *linearMock) readConnection(w http.ResponseWriter, req mockRequest) bool {
+	root, ok := rootBlock(req.Query)
+	if !ok {
+		return false
+	}
+	rootFields := selectedFields(root)
+	if len(rootFields) != 1 {
+		return false
+	}
+
+	// The root field's own block is the first one it introduces: a nested
+	// selection of the same name — `team { id }` inside the nodes — comes later.
+	field := rootFields[0].name
+	blocks := selectionBlocks(root, field)
+	if len(blocks) == 0 {
+		return false
+	}
+	block := blocks[0]
+
+	if selects(block, "nodes") {
+		m.writeData(w, map[string]any{field: m.page(singularOf(field), "", "")})
+		return true
+	}
+
+	nested := selectedFields(block)
+	if len(nested) != 1 {
+		return false
+	}
+	child := nested[0].name
+	childBlocks := selectionBlocks(block, child)
+	if len(childBlocks) == 0 || !selects(childBlocks[0], "nodes") {
+		return false
+	}
+
+	parentID, _ := req.Variables["id"].(string)
+	m.writeData(w, map[string]any{
+		field: map[string]any{child: m.page(singularOf(child), field, parentID)},
+	})
+	return true
+}
+
+// page returns one connection page of the stored entities of a kind — all of
+// them, or, when parentField is set, the ones whose reference to that parent is
+// the id being asked for.
+func (m *linearMock) page(name, parentField, parentID string) map[string]any {
+	ids := make([]string, 0, len(m.entities[name]))
+	for id := range m.entities[name] {
+		ids = append(ids, id)
+	}
+	// Sorted so a connection's order is stable rather than a map's.
+	sort.Strings(ids)
+
+	nodes := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		stored := m.entities[name][id]
+		if parentField != "" && storedRefID(stored[parentField]) != parentID {
+			continue
+		}
+		nodes = append(nodes, stored)
+	}
+	return map[string]any{
+		"nodes":    nodes,
+		"pageInfo": map[string]any{"hasNextPage": false, "endCursor": nil},
+	}
+}
+
+// storedRefID reads the id out of a stored relation — `team: {id: …}`, the shape
+// store translates a `teamId` input into.
+func storedRefID(v any) string {
+	ref, ok := v.(map[string]any)
+	if !ok {
+		return ""
+	}
+	id, _ := ref["id"].(string)
+	return id
+}
+
+// singularOf turns a collection field into the name the mock stores its entities
+// under — `teams` → `team`, `gitAutomationStates` → `gitAutomationState`.
+func singularOf(field string) string { return strings.TrimSuffix(field, "s") }
+
+// selects reports whether a selection block asks for a field at its own level.
+func selects(block, name string) bool {
+	for _, f := range selectedFields(block) {
+		if f.name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *linearMock) remove(w http.ResponseWriter, name string, req mockRequest, verb string) {
@@ -470,6 +722,14 @@ func (m *linearMock) writeError(w http.ResponseWriter, typ, message string) {
 			"extensions": map[string]any{"type": typ},
 		}},
 	})
+}
+
+// forget drops every stored entity of a kind, standing in for them being deleted
+// in Linear behind Terraform's back.
+func (m *linearMock) forget(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.entities, name)
 }
 
 // count reports how many entities of a kind the mock holds, for assertions that
