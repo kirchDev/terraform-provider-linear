@@ -83,6 +83,96 @@ func checkResourceAttributes(t *testing.T, typeName string, s fwresource.Schema)
 	}
 }
 
+// An attribute Linear reports back must be Optional + Computed, never plain
+// Optional. Terraform reads a null configuration value for a non-computed
+// attribute as "make it null": the refresh reads the live value into state, the
+// plan proposes state → null, and the apply sends an explicit null that erases
+// it. That erases settings a human set in the Linear UI on the strength of a
+// configuration that never mentioned them, which is data loss rather than drift.
+//
+// The one attribute that is plain Optional on purpose is the write-only kind —
+// Linear accepts it on the input and never returns it. There is nothing to
+// refresh it against, and Computed would end every apply in "provider produced
+// inconsistent result after apply" because the planned value is not one Linear
+// sends back. Those state **write-only** in their description, which is this
+// repo's own convention and what this test reads them by.
+//
+// The second exemption is nullIsASettingNotAnAbsence below, where the update
+// input sends the null on purpose.
+//
+// The rule is checked here, across every resource, rather than resource by
+// resource: it is a property of the provider, and one file getting it wrong is
+// exactly as expensive as all of them.
+//
+// Nested attributes are deliberately not walked. Every nested object in this
+// provider hangs off a collection Linear replaces wholesale, so its elements are
+// never the "attribute the configuration did not mention" this rule is about —
+// the collection is either in the configuration or it is not.
+func TestResourceOptionalAttributesAreComputedUnlessWriteOnly(t *testing.T) {
+	ctx := context.Background()
+	p := New("test")()
+
+	for _, newResource := range p.Resources(ctx) {
+		r := newResource()
+
+		var meta resource.MetadataResponse
+		r.Metadata(ctx, resource.MetadataRequest{ProviderTypeName: "linear"}, &meta)
+
+		var schemaResp resource.SchemaResponse
+		r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+		if schemaResp.Diagnostics.HasError() {
+			// TestResourceSchemasAreValid is what reports a broken schema.
+			continue
+		}
+
+		for name, attr := range schemaResp.Schema.Attributes {
+			if !attr.IsOptional() || attr.IsComputed() || describesWriteOnly(attr) {
+				continue
+			}
+			if nullIsASettingNotAnAbsence[meta.TypeName+"."+name] != "" {
+				continue
+			}
+			t.Errorf("%s: attribute %q is Optional without Computed and is not documented write-only, "+
+				"so an apply clears its live value whenever the configuration omits it",
+				meta.TypeName, name)
+		}
+	}
+}
+
+// nullIsASettingNotAnAbsence lists the attributes whose *unset* state is a
+// choice the resource sends to Linear as an explicit null, rather than an
+// attribute the configuration merely did not mention. Computed would make that
+// null unreachable — the plan would keep the live value forever and the mode
+// could never be switched back — so plain Optional is correct for exactly these,
+// and the reason is recorded here rather than left to be re-derived.
+//
+// The line is drawn by what the update input does, which is checkable: if
+// input() sends nil for the attribute on purpose, it belongs here; if the null
+// only means "not mentioned", the attribute is Optional + Computed. Nothing is
+// added to this map because an apply was inconvenient — the settings the issue
+// was reported against (a team's icon, its default issue state) are absences,
+// not choices, and they are exactly what must not be listed.
+var nullIsASettingNotAnAbsence = map[string]string{
+	"linear_agent_skill.team_id":                   "a null teamId shares the skill workspace-wide",
+	"linear_custom_view.team_id":                   "a null teamId widens a team view to the workspace",
+	"linear_template.team_id":                      "a null teamId shares a team template across the workspace",
+	"linear_git_automation_state.state_id":         "a null stateId is how a rule overrides a default with no action",
+	"linear_git_automation_state.target_branch_id": "a null targetBranchId applies the rule to every branch",
+	"linear_triage_responsibility.time_schedule_id": "a null timeScheduleId switches a rota back to a manual " +
+		"selection",
+	"linear_triage_responsibility.manual_user_ids": "a null manualSelection hands triage back to a rota",
+}
+
+// describesWriteOnly reports whether an attribute's own description says Linear
+// never returns it. Being unreadable is the only thing that justifies a plain
+// Optional attribute, and the description is where this provider records it — so
+// the exemption is spelled out for the practitioner rather than kept in a list
+// only the test can see.
+func describesWriteOnly(attr fwresource.Attribute) bool {
+	desc := attr.GetMarkdownDescription() + " " + attr.GetDescription()
+	return strings.Contains(strings.ToLower(desc), "write-only")
+}
+
 func TestDataSourceSchemasAreValid(t *testing.T) {
 	ctx := context.Background()
 	p := New("test")()

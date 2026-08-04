@@ -91,9 +91,11 @@ func (m *issueLabelModel) decode(_ context.Context, raw json.RawMessage) error {
 
 func (m *issueLabelModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
+	// Optional + Computed throughout, so clear=false: an attribute the
+	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "parentId", m.ParentID, forUpdate)
+	putString(in, "description", m.Description, false)
+	putString(in, "parentId", m.ParentID, false)
 	// isGroup and teamId only exist on the create input.
 	if !forUpdate {
 		putBool(in, "isGroup", m.IsGroup, false)
@@ -126,6 +128,7 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 		"description": schema.StringAttribute{
 			MarkdownDescription: "Description of the label.",
 			Optional:            true,
+			Computed:            true,
 		},
 		"is_group": schema.BoolAttribute{
 			MarkdownDescription: "Whether the label is a group — a container other labels nest under, which cannot " +
@@ -138,6 +141,7 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 		"parent_id": schema.StringAttribute{
 			MarkdownDescription: "UUID of the parent label group this label nests under.",
 			Optional:            true,
+			Computed:            true,
 		},
 	}
 

@@ -69,7 +69,7 @@ func (m *customerStatusModel) input(_ context.Context, forUpdate bool) map[strin
 	in := map[string]any{"color": m.Color.ValueString()}
 	putString(in, "name", m.Name, false)
 	putString(in, "displayName", m.DisplayName, false)
-	putString(in, "description", m.Description, forUpdate)
+	putString(in, "description", m.Description, false)
 	putFloat(in, "position", m.Position, false)
 	return in
 }
@@ -99,6 +99,7 @@ func customerStatusSchema() schema.Schema {
 			"description": schema.StringAttribute{
 				MarkdownDescription: "Description of what the status represents.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the status indicator as a hex string, e.g. `#26b5ce`.",

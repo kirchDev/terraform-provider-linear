@@ -119,21 +119,23 @@ func (m *emailIntakeAddressModel) decode(_ context.Context, raw json.RawMessage)
 
 func (m *emailIntakeAddressModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{}
+	// Optional + Computed throughout, so clear=false: an attribute the
+	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "teamId", m.TeamID, false)
-	putString(in, "templateId", m.TemplateID, forUpdate)
-	putString(in, "senderName", m.SenderName, forUpdate)
-	putString(in, "forwardingEmailAddress", m.ForwardingEmailAddress, forUpdate)
+	putString(in, "templateId", m.TemplateID, false)
+	putString(in, "senderName", m.SenderName, false)
+	putString(in, "forwardingEmailAddress", m.ForwardingEmailAddress, false)
 
 	putBool(in, "repliesEnabled", m.RepliesEnabled, false)
 	putBool(in, "reopenOnReply", m.ReopenOnReply, false)
 	putBool(in, "useUserNamesInReplies", m.UseUserNamesInReplies, false)
 	putBool(in, "customerRequestsEnabled", m.CustomerRequestsEnabled, false)
 
-	putString(in, "issueCreatedAutoReply", m.IssueCreatedAutoReply, forUpdate)
+	putString(in, "issueCreatedAutoReply", m.IssueCreatedAutoReply, false)
 	putBool(in, "issueCreatedAutoReplyEnabled", m.IssueCreatedAutoReplyEnabled, false)
-	putString(in, "issueCompletedAutoReply", m.IssueCompletedAutoReply, forUpdate)
+	putString(in, "issueCompletedAutoReply", m.IssueCompletedAutoReply, false)
 	putBool(in, "issueCompletedAutoReplyEnabled", m.IssueCompletedAutoReplyEnabled, false)
-	putString(in, "issueCanceledAutoReply", m.IssueCanceledAutoReply, forUpdate)
+	putString(in, "issueCanceledAutoReply", m.IssueCanceledAutoReply, false)
 	putBool(in, "issueCanceledAutoReplyEnabled", m.IssueCanceledAutoReplyEnabled, false)
 
 	// `type` only exists on the create input; `enabled` only on the update one.
@@ -148,6 +150,12 @@ func (m *emailIntakeAddressModel) input(_ context.Context, forUpdate bool) map[s
 func emailIntakeAddressSchema() schema.Schema {
 	optBool := func(desc string) schema.Attribute {
 		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+	}
+	// Optional + Computed, like every other readable attribute here: an intake
+	// address is configured as much in the Linear UI as in HCL, so an attribute
+	// the configuration omits keeps its live value.
+	optString := func(desc string) schema.Attribute {
+		return schema.StringAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
 	}
 
 	return schema.Schema{
@@ -164,10 +172,7 @@ func emailIntakeAddressSchema() schema.Schema {
 				MarkdownDescription: "The generated email address mail is sent to.",
 				Computed:            true,
 			},
-			"team_id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the team incoming mail creates issues for.",
-				Optional:            true,
-			},
+			"team_id": optString("UUID of the team incoming mail creates issues for."),
 			"type": schema.StringAttribute{
 				MarkdownDescription: "Kind of intake address — e.g. `team`, `template`, `asks`. Changing it " +
 					"replaces the resource, since the update mutation has no `type`.",
@@ -175,19 +180,11 @@ func emailIntakeAddressSchema() schema.Schema {
 				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"template_id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the `linear_template` incoming issues are created from.",
-				Optional:            true,
-			},
-			"enabled": optBool("Whether the address accepts mail."),
-			"sender_name": schema.StringAttribute{
-				MarkdownDescription: "Name auto-replies are sent under.",
-				Optional:            true,
-			},
-			"forwarding_email_address": schema.StringAttribute{
-				MarkdownDescription: "Address mail is forwarded from, when the intake sits behind another mailbox.",
-				Optional:            true,
-			},
+			"template_id": optString("UUID of the `linear_template` incoming issues are created from."),
+			"enabled":     optBool("Whether the address accepts mail."),
+			"sender_name": optString("Name auto-replies are sent under."),
+			"forwarding_email_address": optString(
+				"Address mail is forwarded from, when the intake sits behind another mailbox."),
 
 			"replies_enabled":           optBool("Whether replies on the thread are pulled back into the issue."),
 			"reopen_on_reply":           optBool("Whether a reply reopens a closed issue."),
@@ -195,21 +192,12 @@ func emailIntakeAddressSchema() schema.Schema {
 			"customer_requests_enabled": optBool("Whether inbound mail also creates customer requests. Needs " +
 				"Linear Customers enabled for the workspace."),
 
-			"issue_created_auto_reply": schema.StringAttribute{
-				MarkdownDescription: "Auto-reply sent when the issue is created.",
-				Optional:            true,
-			},
-			"issue_created_auto_reply_enabled": optBool("Whether the created auto-reply is sent."),
-			"issue_completed_auto_reply": schema.StringAttribute{
-				MarkdownDescription: "Auto-reply sent when the issue is completed.",
-				Optional:            true,
-			},
+			"issue_created_auto_reply":           optString("Auto-reply sent when the issue is created."),
+			"issue_created_auto_reply_enabled":   optBool("Whether the created auto-reply is sent."),
+			"issue_completed_auto_reply":         optString("Auto-reply sent when the issue is completed."),
 			"issue_completed_auto_reply_enabled": optBool("Whether the completed auto-reply is sent."),
-			"issue_canceled_auto_reply": schema.StringAttribute{
-				MarkdownDescription: "Auto-reply sent when the issue is canceled.",
-				Optional:            true,
-			},
-			"issue_canceled_auto_reply_enabled": optBool("Whether the canceled auto-reply is sent."),
+			"issue_canceled_auto_reply":          optString("Auto-reply sent when the issue is canceled."),
+			"issue_canceled_auto_reply_enabled":  optBool("Whether the canceled auto-reply is sent."),
 		},
 	}
 }

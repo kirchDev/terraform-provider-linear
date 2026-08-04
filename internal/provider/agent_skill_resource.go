@@ -73,8 +73,8 @@ func (m *agentSkillModel) decode(_ context.Context, raw json.RawMessage) error {
 func (m *agentSkillModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"body": m.Body.ValueString()}
 	putString(in, "title", m.Title, false)
-	putString(in, "color", m.Color, forUpdate)
-	putString(in, "icon", m.Icon, forUpdate)
+	putString(in, "color", m.Color, false)
+	putString(in, "icon", m.Icon, false)
 	// A null teamId shares the skill workspace-wide, so the null goes over
 	// explicitly on update.
 	putString(in, "teamId", m.TeamID, forUpdate)
@@ -111,10 +111,12 @@ func agentSkillSchema() schema.Schema {
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the skill icon as a hex string.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"icon": schema.StringAttribute{
 				MarkdownDescription: "Icon of the skill.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"shared": schema.BoolAttribute{
 				MarkdownDescription: "Whether the skill is shared beyond its owner.",
