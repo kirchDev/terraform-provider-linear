@@ -157,7 +157,9 @@ func emailIntakeAddressSchema() schema.Schema {
 	// address is configured as much in the Linear UI as in HCL, so an attribute
 	// the configuration omits keeps its live value.
 	optString := func(desc string) schema.Attribute {
-		return schema.StringAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.StringAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepString(),
+		}
 	}
 
 	return schema.Schema{

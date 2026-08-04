@@ -103,6 +103,7 @@ func customerTierSchema() schema.Schema {
 				MarkdownDescription: "Description of what the tier represents.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the tier indicator as a hex string, e.g. `#f2c94c`.",

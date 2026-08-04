@@ -97,6 +97,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			MarkdownDescription: "Description of the label.",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 		"is_group": schema.BoolAttribute{
 			MarkdownDescription: "Whether the label is a group other labels nest under. Changing this replaces " +
@@ -110,6 +111,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			MarkdownDescription: "UUID of the parent label group this label nests under.",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 	}
 
@@ -121,7 +123,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 				"label. Changing it replaces the label — the update mutation has no `teamId`.",
 			Optional:      true,
 			Computed:      true,
-			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			PlanModifiers: keepString(stringplanmodifier.RequiresReplace()),
 		}
 	}
 	return schema.Schema{MarkdownDescription: desc, Attributes: attrs}

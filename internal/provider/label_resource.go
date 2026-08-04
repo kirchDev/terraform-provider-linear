@@ -130,6 +130,7 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 			MarkdownDescription: "Description of the label.",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 		"is_group": schema.BoolAttribute{
 			MarkdownDescription: "Whether the label is a group — a container other labels nest under, which cannot " +
@@ -143,6 +144,7 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 			MarkdownDescription: "UUID of the parent label group this label nests under.",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 	}
 

@@ -119,6 +119,7 @@ func templateSchema() schema.Schema {
 				MarkdownDescription: "Description of the template.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"type": schema.StringAttribute{
 				MarkdownDescription: "Entity the template applies to, e.g. `issue`, `project`, `document` or " +
@@ -130,11 +131,13 @@ func templateSchema() schema.Schema {
 				MarkdownDescription: "Colour of the template icon as a hex string.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"icon": schema.StringAttribute{
 				MarkdownDescription: "Icon of the template.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"sort_order": schema.Float64Attribute{
 				MarkdownDescription: "Sort position of the template in the template list. Linear assigns one " +
@@ -149,7 +152,7 @@ func templateSchema() schema.Schema {
 					"note template. Changing it replaces the template.",
 				Optional:      true,
 				Computed:      true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: keepString(stringplanmodifier.RequiresReplace()),
 			},
 			"template_json": schema.StringAttribute{
 				MarkdownDescription: "Template body as a JSON object — the pre-filled attributes of the target " +

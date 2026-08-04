@@ -191,16 +191,19 @@ func customViewSchema() schema.Schema {
 				MarkdownDescription: "Description of the view.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"icon": schema.StringAttribute{
 				MarkdownDescription: "Icon of the view.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the view icon as a hex string.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"shared": schema.BoolAttribute{
 				MarkdownDescription: "Whether the view is visible to the whole workspace rather than only its owner.",

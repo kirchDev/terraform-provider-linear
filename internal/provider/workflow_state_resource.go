@@ -113,6 +113,7 @@ func workflowStateSchema() schema.Schema {
 				MarkdownDescription: "Description of the state.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			// Deliberately a plain string, not an enum: Linear types this field as
 			// String and `duplicate` is a real value the API returns. Modelling it as

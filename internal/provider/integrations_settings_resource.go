@@ -155,7 +155,7 @@ func integrationsSettingsSchema() schema.Schema {
 			MarkdownDescription: desc,
 			Optional:            true,
 			Computed:            true,
-			PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			PlanModifiers:       keepString(stringplanmodifier.RequiresReplace()),
 		}
 	}
 	// custom_view_id is the one anchor Linear never reports back, so it cannot be

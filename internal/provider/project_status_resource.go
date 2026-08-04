@@ -102,6 +102,7 @@ func projectStatusSchema() schema.Schema {
 				MarkdownDescription: "Description of the status.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the status indicator as a hex string.",

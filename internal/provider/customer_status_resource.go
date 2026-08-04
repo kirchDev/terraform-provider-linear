@@ -103,6 +103,7 @@ func customerStatusSchema() schema.Schema {
 				MarkdownDescription: "Description of what the status represents.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the status indicator as a hex string, e.g. `#26b5ce`.",
