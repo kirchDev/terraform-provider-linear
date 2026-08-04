@@ -43,7 +43,8 @@ const organizationFields = `id name urlKey logoUrl
 	slackProjectChannelsEnabled slackProjectChannelPrefix slackAutoCreateProjectChannel
 	slackProjectChannelIntegration { id }
 	securitySettings authSettings themeSettings codingAgentSettings linearAgentSettings
-	customersConfiguration ipRestrictions`
+	customersConfiguration
+	ipRestrictions { range type enabled description }`
 
 var (
 	_ resource.Resource                = (*workspaceSettingsResource)(nil)
@@ -120,7 +121,42 @@ type organizationAttributes struct {
 	CodingAgentSettings    json.RawMessage `json:"codingAgentSettings"`
 	LinearAgentSettings    json.RawMessage `json:"linearAgentSettings"`
 	CustomersConfiguration json.RawMessage `json:"customersConfiguration"`
-	IPRestrictions         json.RawMessage `json:"ipRestrictions"`
+
+	IPRestrictions []organizationIPRestriction `json:"ipRestrictions"`
+}
+
+// organizationIPRestriction is one entry of Organization.ipRestrictions. Every
+// other settings blob on the workspace is a JSONObject scalar that travels as
+// raw JSON; this one is a typed list, so the query has to select its subfields
+// and the provider has to put them back together itself.
+//
+// Description is a pointer with omitempty for a reason: GraphQL answers with
+// every subfield the document selected, so a restriction carrying no
+// description comes back as `"description": null`, while the configuration that
+// wrote it simply left the key out. Keeping the null would make those two
+// unequal — jsontypes.Normalized compares the parsed documents, and a key
+// holding null is not an absent key — and end the apply that wrote it in
+// "provider produced inconsistent result after apply".
+type organizationIPRestriction struct {
+	Range       string  `json:"range"`
+	Type        string  `json:"type"`
+	Enabled     bool    `json:"enabled"`
+	Description *string `json:"description,omitempty"`
+}
+
+// ipRestrictionsAttr re-serialises the IP restriction list into the
+// ip_restrictions_json attribute. jsonAttr cannot do it: that hands a JSON
+// scalar through exactly as Linear serialised it, which is right for the
+// JSONObject settings and wrong here, where the nulls have to go first.
+func ipRestrictionsAttr(in []organizationIPRestriction) (jsontypes.Normalized, error) {
+	if in == nil {
+		return jsontypes.NewNormalizedNull(), nil
+	}
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return jsontypes.NewNormalizedNull(), err
+	}
+	return jsontypes.NewNormalizedValue(string(raw)), nil
 }
 
 type workspaceSettingsModel struct {
@@ -265,7 +301,12 @@ func (m *workspaceSettingsModel) decode(ctx context.Context, raw json.RawMessage
 	m.CodingAgentSettingsJSON = jsonAttr(a.CodingAgentSettings)
 	m.LinearAgentSettingsJSON = jsonAttr(a.LinearAgentSettings)
 	m.CustomersConfigurationJSON = jsonAttr(a.CustomersConfiguration)
-	m.IPRestrictionsJSON = jsonAttr(a.IPRestrictions)
+
+	restrictions, err := ipRestrictionsAttr(a.IPRestrictions)
+	if err != nil {
+		return err
+	}
+	m.IPRestrictionsJSON = restrictions
 	return nil
 }
 
@@ -478,7 +519,9 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 			"linear_agent_settings_json":   optJSON("Linear agent settings as a JSON object."),
 			"customers_configuration_json": optJSON("Linear Customers configuration as a JSON object."),
 			"ip_restrictions_json": optJSON("IP restrictions as a JSON array, e.g. " +
-				"`jsonencode([{ range = \"203.0.113.0/24\", type = \"allow\", enabled = true }])`."),
+				"`jsonencode([{ range = \"203.0.113.0/24\", type = \"allow\", enabled = true }])`. Each entry " +
+				"takes `range`, `type` and `enabled`, plus an optional `description`. Compared semantically, and " +
+				"an entry without a description is read back without the key."),
 
 			// Accepted by organizationUpdate but absent from the Organization type,
 			// so there is nothing to refresh them against. Optional, never Computed:

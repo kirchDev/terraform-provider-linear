@@ -77,7 +77,7 @@ resource "linear_workspace_settings" "this" {
 - `initiative_update_reminder_frequency_in_weeks` (Number) How many weeks between initiative update reminders.
 - `initiative_update_reminders_day` (String) Weekday initiative update reminders go out.
 - `initiative_update_reminders_hour` (Number) Hour of day initiative update reminders go out, 0–23.
-- `ip_restrictions_json` (String) IP restrictions as a JSON array, e.g. `jsonencode([{ range = "203.0.113.0/24", type = "allow", enabled = true }])`.
+- `ip_restrictions_json` (String) IP restrictions as a JSON array, e.g. `jsonencode([{ range = "203.0.113.0/24", type = "allow", enabled = true }])`. Each entry takes `range`, `type` and `enabled`, plus an optional `description`. Compared semantically, and an entry without a description is read back without the key.
 - `linear_agent_enabled` (Boolean) Whether the Linear agent is enabled.
 - `linear_agent_settings_json` (String) Linear agent settings as a JSON object.
 - `logo_url` (String) URL of the workspace logo.
