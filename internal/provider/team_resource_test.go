@@ -214,6 +214,76 @@ resource "linear_team" "test" {
 	})
 }
 
+// A team carries settings a human sets in the Linear UI — an icon, a default
+// issue state, the state auto-closed issues move to. A configuration that never
+// mentions them is not asking for them to be erased, so an apply must leave them
+// exactly as they are.
+//
+// Plain Optional cannot do that. Terraform reads a null configuration value for
+// a non-computed attribute as "make it null", so the refresh reads the live value
+// into state, the plan proposes state → null, and the update sends an explicit
+// null that wipes it. That is data loss on an attribute nobody wrote down, which
+// is why linear_workspace_settings is Optional + Computed throughout and why
+// linear_team has to be too.
+func TestAccTeam_keepsLiveValuesTheConfigDoesNotMention(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("team", "Team", teamTypeFields)
+	srv := mock.server(t)
+
+	const (
+		issueState = "fc6401bf-0000-4000-8000-000000000001"
+		closeState = "a5fc2074-0000-4000-8000-000000000002"
+	)
+
+	const managed = `
+resource "linear_team" "test" {
+  name                   = "Engineering"
+  key                    = "ENG"
+  description            = "Ships the product"
+  icon                   = "Server"
+  default_issue_state_id = "` + issueState + `"
+  auto_close_state_id    = "` + closeState + `"
+}
+`
+
+	// The same team, with every one of those attributes dropped from the
+	// configuration — the shape a practitioner writes when the values are managed
+	// in the UI rather than here.
+	const unmanaged = `
+resource "linear_team" "test" {
+  name = "Engineering"
+  key  = "ENG"
+}
+`
+
+	live := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr("linear_team.test", "description", "Ships the product"),
+		resource.TestCheckResourceAttr("linear_team.test", "icon", "Server"),
+		resource.TestCheckResourceAttr("linear_team.test", "default_issue_state_id", issueState),
+		resource.TestCheckResourceAttr("linear_team.test", "auto_close_state_id", closeState),
+	)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + managed,
+				Check:  live,
+			},
+			{
+				// Dropping an attribute from the configuration is not an instruction
+				// to clear it: there is nothing left to change, so the plan is empty
+				// and the live values survive.
+				Config: providerConfig(srv.URL) + unmanaged,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: live,
+			},
+		},
+	})
+}
+
 // issue_sharing_enabled is settable and unreadable: TeamCreateInput and
 // TeamUpdateInput both carry it, type Team does not return it. That makes it
 // write-only in this provider's sense — the mutation still sends it, and state

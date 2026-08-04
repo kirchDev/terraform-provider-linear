@@ -76,9 +76,9 @@ func (m *templateModel) decode(_ context.Context, raw json.RawMessage) error {
 
 func (m *templateModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "color", m.Color, forUpdate)
-	putString(in, "icon", m.Icon, forUpdate)
+	putString(in, "description", m.Description, false)
+	putString(in, "color", m.Color, false)
+	putString(in, "icon", m.Icon, false)
 	putFloat(in, "sortOrder", m.SortOrder, false)
 	// A null teamId on update is what shares a team template across the whole
 	// workspace, so the null goes over explicitly.
@@ -118,6 +118,7 @@ func templateSchema() schema.Schema {
 			"description": schema.StringAttribute{
 				MarkdownDescription: "Description of the template.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"type": schema.StringAttribute{
 				MarkdownDescription: "Entity the template applies to, e.g. `issue`, `project`, `document` or " +
@@ -128,10 +129,12 @@ func templateSchema() schema.Schema {
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the template icon as a hex string.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"icon": schema.StringAttribute{
 				MarkdownDescription: "Icon of the template.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"sort_order": schema.Float64Attribute{
 				MarkdownDescription: "Sort position of the template in the template list. Linear assigns one " +
@@ -145,6 +148,7 @@ func templateSchema() schema.Schema {
 					"when `type` is `releaseNote` and rejected otherwise; a pipeline takes at most one release " +
 					"note template. Changing it replaces the template.",
 				Optional:      true,
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"template_json": schema.StringAttribute{

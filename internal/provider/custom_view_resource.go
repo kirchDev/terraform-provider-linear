@@ -113,10 +113,13 @@ func (m *customViewModel) decode(_ context.Context, raw json.RawMessage) error {
 
 func (m *customViewModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "icon", m.Icon, forUpdate)
-	putString(in, "color", m.Color, forUpdate)
+	putString(in, "description", m.Description, false)
+	putString(in, "icon", m.Icon, false)
+	putString(in, "color", m.Color, false)
 	putBool(in, "shared", m.Shared, false)
+	// A null teamId on update is what widens a team view to the whole workspace,
+	// so the null goes over explicitly — which is why team_id stays plain Optional
+	// while description, icon and colour are Optional + Computed.
 	putString(in, "teamId", m.TeamID, forUpdate)
 	putString(in, "projectId", m.ProjectID, forUpdate)
 	putString(in, "initiativeId", m.InitiativeID, forUpdate)
@@ -187,14 +190,17 @@ func customViewSchema() schema.Schema {
 			"description": schema.StringAttribute{
 				MarkdownDescription: "Description of the view.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"icon": schema.StringAttribute{
 				MarkdownDescription: "Icon of the view.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the view icon as a hex string.",
 				Optional:            true,
+				Computed:            true,
 			},
 			"shared": schema.BoolAttribute{
 				MarkdownDescription: "Whether the view is visible to the whole workspace rather than only its owner.",
