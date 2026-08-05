@@ -175,6 +175,7 @@ func emailIntakeAddressSchema() schema.Schema {
 			"address": schema.StringAttribute{
 				MarkdownDescription: "The generated email address mail is sent to.",
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"team_id": optString("UUID of the team incoming mail creates issues for."),
 			"type": schema.StringAttribute{

@@ -470,10 +470,15 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 			"feed_enabled":              optBool("Whether the workspace feed is available."),
 			"customers_enabled":         optBool("Whether Linear Customers is enabled — the prerequisite for `linear_customer_status` and `linear_customer_tier`."),
 			"generated_updates_enabled": optBool("Whether Linear generates project and initiative updates automatically."),
+			// Computed alone rather than Optional + Computed, which is why it needs
+			// keepBool() spelled out here: the guard over the schemas reaches the
+			// Optional+Computed attributes, and a read-only one is marked
+			// "(known after apply)" by exactly the same mechanism.
 			"releases_enabled": schema.BoolAttribute{
 				MarkdownDescription: "Whether releases are enabled. **Read-only** — Linear reports it but " +
 					"`organizationUpdate` takes no matching field.",
-				Computed: true,
+				Computed:      true,
+				PlanModifiers: keepBool(),
 			},
 
 			"default_home_view":           optString("View new members land on, e.g. `activeIssues`, `myIssues`, `inbox`."),

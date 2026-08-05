@@ -100,7 +100,8 @@ func (r *viewPreferencesResource) Schema(_ context.Context, _ resource.SchemaReq
 			"type": schema.StringAttribute{
 				MarkdownDescription: "Scope of the preferences. Only `organization` — workspace-wide preferences — " +
 					"is managed here; per-user preferences are personal state, not configuration.",
-				Computed: true,
+				Computed:      true,
+				PlanModifiers: keepString(),
 			},
 			"preferences_json": schema.StringAttribute{
 				MarkdownDescription: "Display preferences as a JSON object, e.g. " +
