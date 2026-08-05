@@ -32,7 +32,7 @@ resource "linear_project_label" "customer_facing" {
 - `color` (String) Colour of the label as a hex string, e.g. `#5e6ad2`. Linear picks one when unset.
 - `description` (String) Description of the label.
 - `is_group` (Boolean) Whether the label is a group other labels nest under. Changing this replaces the label.
-- `parent_id` (String) UUID of the parent label group this label nests under.
+- `parent_id` (String) UUID of the parent label group this label nests under. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
 - `team_id` (String) UUID of the team the label is scoped to. Leave unset for a workspace-wide label. Changing it replaces the label — the update mutation has no `teamId`.
 
 ### Read-Only

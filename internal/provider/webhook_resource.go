@@ -144,8 +144,8 @@ func webhookSchema() schema.Schema {
 			"secret": schema.StringAttribute{
 				MarkdownDescription: "Signing secret Linear uses for the `Linear-Signature` header, so the " +
 					"receiver can verify a delivery came from Linear.\n\n" +
-					"Write-only by design: it is sent but never read back, so it cannot surface through a refresh " +
-					"or a provider log. It is still stored in state — keep the state encrypted.",
+					"**Write-only** by design: it is sent but never read back, so it cannot surface through a " +
+					"refresh or a provider log. It is still stored in state — keep the state encrypted.",
 				Optional:  true,
 				Sensitive: true,
 			},

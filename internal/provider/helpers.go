@@ -66,6 +66,44 @@ func putString(in map[string]any, key string, v types.String, clear bool) {
 	}
 }
 
+// putRef sets key from a UUID-typed reference attribute, reading `""` as an
+// explicit clear and sending it to Linear as a null.
+//
+// It is the second trigger for the null `clear` above sends, and it exists
+// because Optional + Computed took the first one away. "An attribute the
+// configuration does not mention keeps its live value" is the right default for
+// a workspace a human also edits in the UI, but it leaves no way to say *unset
+// this*: HCL cannot tell `x = null` from omitting `x`, so both now mean keep.
+// Free text still has an escape — `description = ""` is an empty description —
+// and a reference had none at all, which made a nested team impossible to
+// un-nest through the provider.
+//
+// `""` is not a UUID Linear would ever store, so on a reference it can only mean
+// one thing, and that is what it is read as. Only references get this: on free
+// text `""` is a value, and `description = ""` has to keep meaning an empty
+// description rather than "restore whatever is live".
+//
+// Attributes written through here state the mechanism in their own description
+// via clearWithEmptyString, and keepCleared is the other half — the round trip
+// back into state.
+func putRef(in map[string]any, key string, v types.String) {
+	switch {
+	case v.IsUnknown(), v.IsNull():
+	case v.ValueString() == "":
+		in[key] = nil
+	default:
+		in[key] = v.ValueString()
+	}
+}
+
+// clearWithEmptyString is the sentence every attribute putRef writes carries, so
+// the mechanism reaches the practitioner reading the registry docs and not only
+// the next person reading helpers.go. Shared rather than retyped: eleven
+// hand-written variants would drift, and a reference added later should inherit
+// the wording by construction.
+const clearWithEmptyString = " Set it to `\"\"` to unset the reference — leaving the attribute out of the " +
+	"configuration keeps whatever is live, so `\"\"` is how a configuration asks for no reference at all."
+
 func putBool(in map[string]any, key string, v types.Bool, clear bool) {
 	switch {
 	case v.IsUnknown():
@@ -255,4 +293,24 @@ func refID(r *ref) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(r.ID)
+}
+
+// keepCleared maps a reference Linear answered with back into state, preserving
+// the `""` putRef sent as an explicit null.
+//
+// Linear answers a cleared reference with no reference at all, and mapping that
+// straight to null would contradict the `""` Terraform planned — the framework
+// fails an apply whose result differs from a value it planned as known, so the
+// clear would end in "provider produced inconsistent result after apply". The
+// refresh needs it just as much: rewriting `""` to null there puts state and
+// configuration back out of step and reopens the same diff on every plan.
+//
+// current is whatever the model already holds — the planned value during an
+// apply, the prior state during a read. A reference Linear does report always
+// wins, so a parent set in the UI behind Terraform's back is still drift.
+func keepCleared(current, fromAPI types.String) types.String {
+	if fromAPI.IsNull() && !current.IsNull() && !current.IsUnknown() && current.ValueString() == "" {
+		return current
+	}
+	return fromAPI
 }

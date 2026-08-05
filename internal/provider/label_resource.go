@@ -84,7 +84,7 @@ func (m *issueLabelModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.Color = stringOrNull(a.Color)
 	m.Description = types.StringPointerValue(a.Description)
 	m.IsGroup = types.BoolValue(a.IsGroup)
-	m.ParentID = refID(a.Parent)
+	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 	m.TeamID = refID(a.Team)
 	return nil
 }
@@ -95,7 +95,7 @@ func (m *issueLabelModel) input(_ context.Context, forUpdate bool) map[string]an
 	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
 	putString(in, "description", m.Description, false)
-	putString(in, "parentId", m.ParentID, false)
+	putRef(in, "parentId", m.ParentID)
 	// isGroup and teamId only exist on the create input.
 	if !forUpdate {
 		putBool(in, "isGroup", m.IsGroup, false)
@@ -141,7 +141,7 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 			PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
 		},
 		"parent_id": schema.StringAttribute{
-			MarkdownDescription: "UUID of the parent label group this label nests under.",
+			MarkdownDescription: "UUID of the parent label group this label nests under." + clearWithEmptyString,
 			Optional:            true,
 			Computed:            true,
 			PlanModifiers:       keepString(),
