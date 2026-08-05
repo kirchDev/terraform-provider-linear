@@ -29,7 +29,16 @@ import (
 // prior value is its planned value — see plan.go.
 //
 // Each entry says which attribute the value is derived from, because that is the
-// claim being made and it is checkable against the attribute's own description.
+// claim being made and naming it is what makes it reviewable. Most are checkable
+// against the attribute's own description; the three on linear_agent_skill are
+// not — "URL slug of the skill" and "Whether the skill is shared beyond its
+// owner" say nothing about a title or a team_id, so those entries read the
+// resource's shape rather than a documented promise. Nothing here has been
+// observed against a real workspace either. A wrong entry costs plan noise on
+// that one resource — the attribute reads "(known after apply)" where it could
+// have read its prior value — not a wrong value, so an inference is allowed to
+// stand here as long as it is visible as one.
+//
 // A read-only attribute that is *not* derived from anything belongs in neither
 // camp and simply carries keepX(): it cannot change, so its prior value is the
 // only honest plan.
