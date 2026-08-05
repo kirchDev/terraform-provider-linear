@@ -168,9 +168,18 @@ var nullIsASettingNotAnAbsence = map[string]string{
 // Optional attribute, and the description is where this provider records it — so
 // the exemption is spelled out for the practitioner rather than kept in a list
 // only the test can see.
+//
+// The marker is the **bolded** form, not the bare words. An exemption granted on
+// "write-only" appearing anywhere is granted to any description that merely
+// mentions one — "unlike `product_intelligence_scope`, which is write-only" —
+// and it would be granted silently, on the one guard whose whole job is to catch
+// an attribute that quietly erases live values. Bolding is what this repo
+// already does when an attribute states the property *of itself*, so requiring
+// it costs nothing and narrows the hole to a description that goes out of its
+// way to look like a declaration.
 func describesWriteOnly(attr fwresource.Attribute) bool {
 	desc := attr.GetMarkdownDescription() + " " + attr.GetDescription()
-	return strings.Contains(strings.ToLower(desc), "write-only")
+	return strings.Contains(strings.ToLower(desc), "**write-only**")
 }
 
 func TestDataSourceSchemasAreValid(t *testing.T) {
