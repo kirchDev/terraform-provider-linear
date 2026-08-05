@@ -102,6 +102,7 @@ func teamMembershipSchema() schema.Schema {
 				MarkdownDescription: "Sort position of the team in the user's sidebar.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepFloat(),
 			},
 		},
 	}

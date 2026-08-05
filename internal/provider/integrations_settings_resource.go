@@ -155,7 +155,7 @@ func integrationsSettingsSchema() schema.Schema {
 			MarkdownDescription: desc,
 			Optional:            true,
 			Computed:            true,
-			PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			PlanModifiers:       keepString(stringplanmodifier.RequiresReplace()),
 		}
 	}
 	// custom_view_id is the one anchor Linear never reports back, so it cannot be
@@ -169,7 +169,9 @@ func integrationsSettingsSchema() schema.Schema {
 		}
 	}
 	notify := func(desc string) schema.Attribute {
-		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.BoolAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepBool(),
+		}
 	}
 
 	return schema.Schema{

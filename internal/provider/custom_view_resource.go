@@ -153,6 +153,7 @@ func customViewSchema() schema.Schema {
 			Validators: []validator.String{
 				stringvalidator.ConflictsWith(filterPaths...),
 			},
+			PlanModifiers: keepString(),
 		}
 	}
 
@@ -190,16 +191,19 @@ func customViewSchema() schema.Schema {
 				MarkdownDescription: "Description of the view.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"icon": schema.StringAttribute{
 				MarkdownDescription: "Icon of the view.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the view icon as a hex string.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"shared": schema.BoolAttribute{
 				MarkdownDescription: "Whether the view is visible to the whole workspace rather than only its owner.",
@@ -231,6 +235,7 @@ func customViewSchema() schema.Schema {
 				MarkdownDescription: "UUID of the user who owns the view. Defaults to whoever the API key belongs to.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 
 			"filter_json": filterAttr("Issue filter as a JSON object, e.g. " +

@@ -115,6 +115,9 @@ func releasePipelineSchema() schema.Schema {
 				MarkdownDescription: "Name of the pipeline.",
 				Required:            true,
 			},
+			// No keepString() here, deliberately: the slug is derived from the
+			// name, so on a rename it really is not knowable until Linear has
+			// answered. See plan.go and derivedFromAnotherAttribute.
 			"slug_id": schema.StringAttribute{
 				MarkdownDescription: "URL slug of the pipeline. Linear derives one from the name when unset.",
 				Optional:            true,
@@ -128,6 +131,7 @@ func releasePipelineSchema() schema.Schema {
 				Validators: []validator.String{
 					stringvalidator.OneOf("continuous", "scheduled"),
 				},
+				PlanModifiers: keepString(),
 			},
 			"is_production": schema.BoolAttribute{
 				MarkdownDescription: "Whether this pipeline ships to production.",
@@ -138,20 +142,23 @@ func releasePipelineSchema() schema.Schema {
 			"include_path_patterns": schema.ListAttribute{
 				MarkdownDescription: "Repository path patterns a change has to touch to belong to this pipeline, " +
 					"e.g. `[\"apps/web/**\"]`. An empty list includes everything.",
-				Optional:    true,
-				Computed:    true,
-				ElementType: types.StringType,
+				Optional:      true,
+				Computed:      true,
+				ElementType:   types.StringType,
+				PlanModifiers: keepList(),
 			},
 			"auto_generate_release_notes_on_completion": schema.BoolAttribute{
 				MarkdownDescription: "Whether Linear writes release notes itself when a release completes.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepBool(),
 			},
 			"team_ids": schema.SetAttribute{
 				MarkdownDescription: "UUIDs of the teams shipping through this pipeline.",
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
+				PlanModifiers:       keepSet(),
 			},
 		},
 	}

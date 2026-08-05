@@ -145,11 +145,13 @@ func timeScheduleSchema() schema.Schema {
 				MarkdownDescription: "Identifier of the schedule in the external system it mirrors.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"external_url": schema.StringAttribute{
 				MarkdownDescription: "URL of the schedule in the external system it mirrors.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"entries": schema.ListNestedAttribute{
 				MarkdownDescription: "Shifts making up the rota. Sending this replaces every entry — there is no " +

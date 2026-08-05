@@ -85,6 +85,9 @@ func customerTierSchema() schema.Schema {
 				Computed:            true,
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
+			// Neither carries keepString(), deliberately: each fills in for the
+			// other, so changing one leaves the other genuinely unknown until
+			// Linear has answered. See plan.go and derivedFromAnotherAttribute.
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Internal name of the tier. Unique within the workspace. Set at least one of " +
 					"`name` and `display_name`.",
@@ -100,6 +103,7 @@ func customerTierSchema() schema.Schema {
 				MarkdownDescription: "Description of what the tier represents.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the tier indicator as a hex string, e.g. `#f2c94c`.",
@@ -108,8 +112,9 @@ func customerTierSchema() schema.Schema {
 			"position": schema.Float64Attribute{
 				MarkdownDescription: "Sort position within the workspace's tier ordering. Linear appends the tier " +
 					"at the end when unset.",
-				Optional: true,
-				Computed: true,
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: keepFloat(),
 			},
 		},
 	}

@@ -111,6 +111,7 @@ func webhookSchema() schema.Schema {
 				MarkdownDescription: "Label identifying the webhook in the Linear UI.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"enabled": schema.BoolAttribute{
 				MarkdownDescription: "Whether the webhook fires. Linear disables a webhook itself after repeated " +
@@ -130,7 +131,7 @@ func webhookSchema() schema.Schema {
 					"`all_public_teams` for a workspace-wide webhook. Changing it replaces the webhook.",
 				Optional:      true,
 				Computed:      true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: keepString(stringplanmodifier.RequiresReplace()),
 			},
 			"all_public_teams": schema.BoolAttribute{
 				MarkdownDescription: "Whether the webhook covers every public team rather than a single one. " +

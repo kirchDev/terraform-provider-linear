@@ -99,6 +99,7 @@ func agentSkillSchema() schema.Schema {
 				MarkdownDescription: "Title of the skill.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"body": schema.StringAttribute{
 				MarkdownDescription: "Instructions the skill carries, as Markdown.",
@@ -112,11 +113,13 @@ func agentSkillSchema() schema.Schema {
 				MarkdownDescription: "Colour of the skill icon as a hex string.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"icon": schema.StringAttribute{
 				MarkdownDescription: "Icon of the skill.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"shared": schema.BoolAttribute{
 				MarkdownDescription: "Whether the skill is shared beyond its owner.",
