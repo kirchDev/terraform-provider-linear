@@ -48,7 +48,7 @@ resource "linear_email_intake_address" "support" {
 - `replies_enabled` (Boolean) Whether replies on the thread are pulled back into the issue.
 - `sender_name` (String) Name auto-replies are sent under.
 - `team_id` (String) UUID of the team incoming mail creates issues for.
-- `template_id` (String) UUID of the `linear_template` incoming issues are created from.
+- `template_id` (String) UUID of the `linear_template` incoming issues are created from. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
 - `type` (String) Kind of intake address — e.g. `team`, `template`, `asks`. Changing it replaces the resource, since the update mutation has no `type`.
 - `use_user_names_in_replies` (Boolean) Whether replies are attributed to the responding member by name.
 

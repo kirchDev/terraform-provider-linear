@@ -54,7 +54,7 @@ resource "linear_team" "engineering" {
 - `auto_close_child_issues` (Boolean) Whether closing a parent issue auto-closes its sub-issues.
 - `auto_close_parent_issues` (Boolean) Whether closing every sub-issue auto-closes the parent.
 - `auto_close_period` (Number) Months of inactivity after which an open issue is closed. Linear reports whether auto-closing is on at all, so removing the attribute keeps the live value rather than disabling it — set it explicitly to change it.
-- `auto_close_state_id` (String) UUID of the workflow state auto-closed issues move to.
+- `auto_close_state_id` (String) UUID of the workflow state auto-closed issues move to. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
 - `color` (String) Colour of the team as a hex string.
 - `cycle_cooldown_time` (Number) Cooldown between cycles in weeks.
 - `cycle_duration` (Number) Length of a cycle in weeks.
@@ -64,10 +64,10 @@ resource "linear_team" "engineering" {
 - `cycle_start_day` (Number) Weekday cycles start on, `0` being Sunday.
 - `cycles_enabled` (Boolean) Whether Linear generates cycles for the team.
 - `default_issue_estimate` (Number) Estimate given to an issue that has none.
-- `default_issue_state_id` (String) UUID of the workflow state new issues start in.
-- `default_project_template_id` (String) UUID of the `linear_template` new projects of this team start from.
-- `default_template_for_members_id` (String) UUID of the `linear_template` used for issues created by team members.
-- `default_template_for_non_members_id` (String) UUID of the `linear_template` used for issues created by people outside the team.
+- `default_issue_state_id` (String) UUID of the workflow state new issues start in. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
+- `default_project_template_id` (String) UUID of the `linear_template` new projects of this team start from. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
+- `default_template_for_members_id` (String) UUID of the `linear_template` used for issues created by team members. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
+- `default_template_for_non_members_id` (String) UUID of the `linear_template` used for issues created by people outside the team. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
 - `description` (String) Description of the team.
 - `group_issue_history` (Boolean) Whether the issue history groups consecutive changes by the same author.
 - `icon` (String) Icon of the team.
@@ -82,7 +82,7 @@ resource "linear_team" "engineering" {
 - `issue_sharing_enabled` (Boolean) Whether issues of this team can be shared with a public link. **Write-only**: `TeamCreateInput` and `TeamUpdateInput` both take it, but the team does not expose it, so drift in this attribute cannot be detected. Not to be confused with the `issueSharing` key of `security_settings_json`, which is the role allowed to share rather than whether sharing is on at all.
 - `join_by_default` (Boolean) Whether new workspace members join this team automatically.
 - `key` (String) Team key — the prefix of every issue identifier, e.g. `ENG` in `ENG-42`. Linear derives one from the name when unset.
-- `parent_id` (String) UUID of the parent team this team nests under.
+- `parent_id` (String) UUID of the parent team this team nests under. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
 - `private` (Boolean) Whether the team is private — visible only to its members.
 - `product_intelligence_scope` (String) Scope product intelligence data is shared across — `none`, `team`, `teamHierarchy` or `workspace`. **Write-only**: Linear accepts it on the team input but does not expose it on the team, so drift in this attribute cannot be detected.
 - `require_priority_to_leave_triage` (Boolean) Whether an issue needs a priority before it can leave triage.

@@ -284,6 +284,111 @@ resource "linear_team" "test" {
 	})
 }
 
+// Optional + Computed buys "an attribute the configuration leaves out keeps its
+// live value", and it is paid for with the only way HCL had to say *unset this*:
+// `x = null` is indistinguishable from omitting `x`, so removing the attribute
+// no longer clears anything. Free text still has an escape — `description = ""`
+// is an empty description — but a UUID has no such value, so a nested team could
+// not be un-nested through the provider at all.
+//
+// `""` on a reference is therefore read as the one intent it can carry and sent
+// to Linear as an explicit null. The round trip is the half that has to hold:
+// Linear answers a cleared reference with no reference at all, so state has to
+// keep the `""` the plan promised. Map it back to null and the apply ends in
+// "provider produced inconsistent result after apply" — and if it somehow got
+// past that, the next refresh would rewrite state to null and reopen the same
+// diff on every plan forever.
+//
+// Both decode shapes are covered here on purpose: default_issue_state_id and
+// parent_id come back as a nested `{ id }` relation, auto_close_state_id as a
+// bare scalar, and they are mapped by different helpers.
+func TestAccTeam_emptyStringClearsAReference(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("team", "Team", teamTypeFields)
+	srv := mock.server(t)
+
+	const (
+		parent     = "b19c4ae2-0000-4000-8000-000000000003"
+		issueState = "fc6401bf-0000-4000-8000-000000000001"
+		closeState = "a5fc2074-0000-4000-8000-000000000002"
+	)
+
+	const nested = `
+resource "linear_team" "test" {
+  name                   = "Engineering"
+  key                    = "ENG"
+  parent_id              = "` + parent + `"
+  default_issue_state_id = "` + issueState + `"
+  auto_close_state_id    = "` + closeState + `"
+}
+`
+
+	// The same team asking for all three references to be unset — the only way a
+	// configuration can say so once the attributes are Optional + Computed.
+	const cleared = `
+resource "linear_team" "test" {
+  name                   = "Engineering"
+  key                    = "ENG"
+  parent_id              = ""
+  default_issue_state_id = ""
+  auto_close_state_id    = ""
+}
+`
+
+	isEmpty := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr("linear_team.test", "parent_id", ""),
+		resource.TestCheckResourceAttr("linear_team.test", "default_issue_state_id", ""),
+		resource.TestCheckResourceAttr("linear_team.test", "auto_close_state_id", ""),
+	)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + nested,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("linear_team.test", "parent_id", parent),
+					resource.TestCheckResourceAttr("linear_team.test", "default_issue_state_id", issueState),
+					resource.TestCheckResourceAttr("linear_team.test", "auto_close_state_id", closeState),
+				),
+			},
+			{
+				Config: providerConfig(srv.URL) + cleared,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					isEmpty,
+					// State reading `""` is not on its own proof that Linear was told
+					// anything: the mutation has to have carried a null, which is what
+					// actually drops the relation. The mock stores what it was sent, so
+					// the absence of the keys is that proof.
+					func(*terraform.State) error {
+						stored := mock.only(t, "team")
+						for _, field := range []string{
+							"parent", "parentId",
+							"defaultIssueState", "defaultIssueStateId",
+							"autoCloseState", "autoCloseStateId",
+						} {
+							if got, ok := stored[field]; ok {
+								t.Errorf("team still holds %s = %#v: the update sent an empty string "+
+									"rather than an explicit null", field, got)
+							}
+						}
+						return nil
+					},
+				),
+			},
+			// And the clear settles rather than re-proposing itself: `""` in the
+			// configuration and `""` in state are the same value.
+			{
+				Config: providerConfig(srv.URL) + cleared,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: isEmpty,
+			},
+		},
+	})
+}
+
 // issue_sharing_enabled is settable and unreadable: TeamCreateInput and
 // TeamUpdateInput both carry it, type Team does not return it. That makes it
 // write-only in this provider's sense — the mutation still sends it, and state

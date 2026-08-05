@@ -54,7 +54,7 @@ func (m *projectLabelModel) decode(_ context.Context, raw json.RawMessage) error
 	m.Color = stringOrNull(a.Color)
 	m.Description = types.StringPointerValue(a.Description)
 	m.IsGroup = types.BoolValue(a.IsGroup)
-	m.ParentID = refID(a.Parent)
+	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 	m.TeamID = refID(a.Team)
 	return nil
 }
@@ -65,7 +65,7 @@ func (m *projectLabelModel) input(_ context.Context, forUpdate bool) map[string]
 	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
 	putString(in, "description", m.Description, false)
-	putString(in, "parentId", m.ParentID, false)
+	putRef(in, "parentId", m.ParentID)
 	if !forUpdate {
 		putBool(in, "isGroup", m.IsGroup, false)
 		putString(in, "teamId", m.TeamID, false)
@@ -108,7 +108,7 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
 		},
 		"parent_id": schema.StringAttribute{
-			MarkdownDescription: "UUID of the parent label group this label nests under.",
+			MarkdownDescription: "UUID of the parent label group this label nests under." + clearWithEmptyString,
 			Optional:            true,
 			Computed:            true,
 			PlanModifiers:       keepString(),

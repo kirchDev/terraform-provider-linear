@@ -183,7 +183,7 @@ func (m *teamModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.Color = types.StringPointerValue(a.Color)
 	m.Private = types.BoolValue(a.Private)
 	m.Timezone = types.StringValue(a.Timezone)
-	m.ParentID = refID(a.Parent)
+	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 
 	m.CyclesEnabled = types.BoolValue(a.CyclesEnabled)
 	m.CycleStartDay = types.Float64Value(a.CycleStartDay)
@@ -199,7 +199,7 @@ func (m *teamModel) decode(_ context.Context, raw json.RawMessage) error {
 
 	m.AutoArchivePeriod = types.Float64Value(a.AutoArchivePeriod)
 	m.AutoClosePeriod = types.Float64PointerValue(a.AutoClosePeriod)
-	m.AutoCloseStateID = types.StringPointerValue(a.AutoCloseStateID)
+	m.AutoCloseStateID = keepCleared(m.AutoCloseStateID, types.StringPointerValue(a.AutoCloseStateID))
 	m.AutoCloseParentIssues = types.BoolPointerValue(a.AutoCloseParentIssues)
 	m.AutoCloseChildIssues = types.BoolPointerValue(a.AutoCloseChildIssues)
 
@@ -223,10 +223,11 @@ func (m *teamModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.AllMembersCanJoin = types.BoolPointerValue(a.AllMembersCanJoin)
 	m.JoinByDefault = types.BoolPointerValue(a.JoinByDefault)
 
-	m.DefaultIssueStateID = refID(a.DefaultIssueState)
-	m.DefaultProjectTemplateID = refID(a.DefaultProjectTemplate)
-	m.DefaultTemplateForMembersID = refID(a.DefaultTemplateForMembers)
-	m.DefaultTemplateForNonMembersID = refID(a.DefaultTemplateForNonMembers)
+	m.DefaultIssueStateID = keepCleared(m.DefaultIssueStateID, refID(a.DefaultIssueState))
+	m.DefaultProjectTemplateID = keepCleared(m.DefaultProjectTemplateID, refID(a.DefaultProjectTemplate))
+	m.DefaultTemplateForMembersID = keepCleared(m.DefaultTemplateForMembersID, refID(a.DefaultTemplateForMembers))
+	m.DefaultTemplateForNonMembersID = keepCleared(
+		m.DefaultTemplateForNonMembersID, refID(a.DefaultTemplateForNonMembers))
 
 	m.SecuritySettingsJSON = jsonAttr(a.SecuritySettings)
 	return nil
@@ -265,7 +266,9 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 	putString(in, "color", m.Color, false)
 	putBool(in, "private", m.Private, false)
 	putString(in, "timezone", m.Timezone, false)
-	putString(in, "parentId", m.ParentID, false)
+	// The reference attributes go through putRef, which reads `""` as an explicit
+	// clear — the one intent Optional + Computed otherwise leaves unsayable.
+	putRef(in, "parentId", m.ParentID)
 
 	putBool(in, "cyclesEnabled", m.CyclesEnabled, false)
 	putFloat(in, "cycleStartDay", m.CycleStartDay, false)
@@ -281,7 +284,7 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 
 	putFloat(in, "autoArchivePeriod", m.AutoArchivePeriod, false)
 	putFloat(in, "autoClosePeriod", m.AutoClosePeriod, false)
-	putString(in, "autoCloseStateId", m.AutoCloseStateID, false)
+	putRef(in, "autoCloseStateId", m.AutoCloseStateID)
 
 	putFloat(in, "defaultIssueEstimate", m.DefaultIssueEstimate, false)
 	putString(in, "issueEstimationType", m.IssueEstimationType, false)
@@ -297,9 +300,9 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 	putBool(in, "inheritSlackAutoCreateProjectChannel", m.InheritSlackAutoCreateProjectChannel, false)
 	putBool(in, "slackAutoCreateProjectChannel", m.SlackAutoCreateProjectChannel, false)
 
-	putString(in, "defaultProjectTemplateId", m.DefaultProjectTemplateID, false)
-	putString(in, "defaultTemplateForMembersId", m.DefaultTemplateForMembersID, false)
-	putString(in, "defaultTemplateForNonMembersId", m.DefaultTemplateForNonMembersID, false)
+	putRef(in, "defaultProjectTemplateId", m.DefaultProjectTemplateID)
+	putRef(in, "defaultTemplateForMembersId", m.DefaultTemplateForMembersID)
+	putRef(in, "defaultTemplateForNonMembersId", m.DefaultTemplateForNonMembersID)
 
 	// Write-only: on both team inputs, on neither the Team type nor the
 	// selection set above.
@@ -315,7 +318,7 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 		putBool(in, "joinByDefault", m.JoinByDefault, false)
 		putBool(in, "autoCloseParentIssues", m.AutoCloseParentIssues, false)
 		putBool(in, "autoCloseChildIssues", m.AutoCloseChildIssues, false)
-		putString(in, "defaultIssueStateId", m.DefaultIssueStateID, false)
+		putRef(in, "defaultIssueStateId", m.DefaultIssueStateID)
 		_ = putJSON(in, "securitySettings", m.SecuritySettingsJSON, false)
 	}
 	return in
@@ -382,7 +385,7 @@ func teamSchema() schema.Schema {
 			"color":       optString("Colour of the team as a hex string."),
 			"private":     optBool("Whether the team is private — visible only to its members."),
 			"timezone":    optString("Timezone the team's cycles and SLAs are computed in, e.g. `Europe/Berlin`."),
-			"parent_id":   optString("UUID of the parent team this team nests under."),
+			"parent_id":   optString("UUID of the parent team this team nests under." + clearWithEmptyString),
 
 			"cycles_enabled":                    optBool("Whether Linear generates cycles for the team."),
 			"cycle_start_day":                   optFloat("Weekday cycles start on, `0` being Sunday."),
@@ -400,7 +403,8 @@ func teamSchema() schema.Schema {
 			"auto_close_period": optFloat("Months of inactivity after which an open issue is closed. Linear " +
 				"reports whether auto-closing is on at all, so removing the attribute keeps the live value rather " +
 				"than disabling it — set it explicitly to change it."),
-			"auto_close_state_id":      optString("UUID of the workflow state auto-closed issues move to."),
+			"auto_close_state_id": optString(
+				"UUID of the workflow state auto-closed issues move to." + clearWithEmptyString),
 			"auto_close_parent_issues": optBool("Whether closing every sub-issue auto-closes the parent."),
 			"auto_close_child_issues":  optBool("Whether closing a parent issue auto-closes its sub-issues."),
 
@@ -428,13 +432,15 @@ func teamSchema() schema.Schema {
 			"all_members_can_join": optBool("Whether any workspace member can join the team without an invite."),
 			"join_by_default":      optBool("Whether new workspace members join this team automatically."),
 
-			"default_issue_state_id": optString("UUID of the workflow state new issues start in."),
+			"default_issue_state_id": optString(
+				"UUID of the workflow state new issues start in." + clearWithEmptyString),
 			"default_project_template_id": optString(
-				"UUID of the `linear_template` new projects of this team start from."),
+				"UUID of the `linear_template` new projects of this team start from." + clearWithEmptyString),
 			"default_template_for_members_id": optString(
-				"UUID of the `linear_template` used for issues created by team members."),
+				"UUID of the `linear_template` used for issues created by team members." + clearWithEmptyString),
 			"default_template_for_non_members_id": optString(
-				"UUID of the `linear_template` used for issues created by people outside the team."),
+				"UUID of the `linear_template` used for issues created by people outside the team." +
+					clearWithEmptyString),
 
 			"security_settings_json": schema.StringAttribute{
 				MarkdownDescription: "Team security settings as a JSON object — which role may manage what, e.g. " +

@@ -113,7 +113,7 @@ func (m *emailIntakeAddressModel) decode(_ context.Context, raw json.RawMessage)
 	m.IssueCanceledAutoReplyEnabled = types.BoolValue(a.IssueCanceledAutoReplyEnabled)
 
 	m.TeamID = refID(a.Team)
-	m.TemplateID = refID(a.Template)
+	m.TemplateID = keepCleared(m.TemplateID, refID(a.Template))
 	return nil
 }
 
@@ -122,7 +122,7 @@ func (m *emailIntakeAddressModel) input(_ context.Context, forUpdate bool) map[s
 	// Optional + Computed throughout, so clear=false: an attribute the
 	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "teamId", m.TeamID, false)
-	putString(in, "templateId", m.TemplateID, false)
+	putRef(in, "templateId", m.TemplateID)
 	putString(in, "senderName", m.SenderName, false)
 	putString(in, "forwardingEmailAddress", m.ForwardingEmailAddress, false)
 
@@ -184,7 +184,8 @@ func emailIntakeAddressSchema() schema.Schema {
 				Computed:      true,
 				PlanModifiers: keepString(stringplanmodifier.RequiresReplace()),
 			},
-			"template_id": optString("UUID of the `linear_template` incoming issues are created from."),
+			"template_id": optString(
+				"UUID of the `linear_template` incoming issues are created from." + clearWithEmptyString),
 			"enabled":     optBool("Whether the address accepts mail."),
 			"sender_name": optString("Name auto-replies are sent under."),
 			"forwarding_email_address": optString(
