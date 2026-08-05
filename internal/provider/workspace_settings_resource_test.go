@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +15,7 @@ import (
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 // organizationTypeFields is what `type Organization` exposes, copied from
@@ -156,6 +158,64 @@ data "linear_organization" "test" {}
 				ImportState:       true,
 				ImportStateVerify: true,
 				Config:            providerConfig(srv.URL) + config,
+			},
+		},
+	})
+}
+
+// Linear refuses an organizationUpdate that carries the organization's own
+// unchanged url key — `invalid input: non-unique organization url key` — so an
+// update echoing the whole workspace back fails whatever the configuration
+// changed. Every attribute here being Optional + Computed is what fills the
+// plan with live values to echo, so the update has to send only what moved.
+//
+// The assertion is on the raw input rather than the stored entity: store merges
+// the input onto what was seeded, so a field that was already there reads the
+// same whether the provider sent it or not, and "did not send" is the whole
+// claim.
+func TestAccWorkspaceSettings_updateSendsOnlyWhatChanged(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("organization", "Organization", organizationTypeFields)
+	seedWorkspace(mock)
+	srv := mock.server(t)
+
+	const adopt = `
+resource "linear_workspace_settings" "test" {
+  name = "kirchDev"
+}
+`
+	const renamed = `
+resource "linear_workspace_settings" "test" {
+  name = "IT-Dienstleistungen Titus Kirch"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: providerConfig(srv.URL) + adopt},
+			{
+				Config: providerConfig(srv.URL) + renamed,
+				Check: func(*terraform.State) error {
+					inputs := mock.updateInputs("organization")
+					if len(inputs) == 0 {
+						return fmt.Errorf("no organizationUpdate was sent at all")
+					}
+					in := inputs[len(inputs)-1]
+					if _, sent := in["urlKey"]; sent {
+						return fmt.Errorf("update sent urlKey unchanged, which Linear rejects: %#v", in)
+					}
+					if got := in["name"]; got != "IT-Dienstleistungen Titus Kirch" {
+						return fmt.Errorf("update did not carry the changed name, got %#v", got)
+					}
+					// The point is not merely that urlKey is gone: an update that
+					// still echoed forty other unchanged settings would pass the
+					// check above and remain the same bug one field further on.
+					if len(in) != 1 {
+						return fmt.Errorf("update sent %d fields, want only the changed one: %#v", len(in), in)
+					}
+					return nil
+				},
 			},
 		},
 	})
