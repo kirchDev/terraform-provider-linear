@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -562,7 +563,8 @@ func (r *workspaceSettingsResource) Create(ctx context.Context, req resource.Cre
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.apply(ctx, &plan, &resp.Diagnostics, &resp.State)
+	// No prior state on create — adoption sends whatever the configuration asks for.
+	r.apply(ctx, &plan, nil, &resp.Diagnostics, &resp.State)
 }
 
 func (r *workspaceSettingsResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -585,12 +587,13 @@ func (r *workspaceSettingsResource) Read(ctx context.Context, req resource.ReadR
 }
 
 func (r *workspaceSettingsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan workspaceSettingsModel
+	var plan, prior workspaceSettingsModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.apply(ctx, &plan, &resp.Diagnostics, &resp.State)
+	r.apply(ctx, &plan, &prior, &resp.Diagnostics, &resp.State)
 }
 
 // Delete is a no-op beyond dropping the resource from state — destroying a
@@ -607,10 +610,53 @@ func (r *workspaceSettingsResource) ImportState(ctx context.Context, req resourc
 }
 
 // apply pushes the configuration and writes back what the API returned.
-func (r *workspaceSettingsResource) apply(ctx context.Context, plan *workspaceSettingsModel, diags *diag.Diagnostics, state *tfsdk.State) {
+//
+// `prior` is the state this update starts from, or nil on create. Only the
+// attributes whose value actually moved are sent: every attribute here is
+// Optional + Computed, so one the configuration omits carries its live value in
+// the plan, and putting that back into the mutation echoes the whole workspace
+// on every apply. Linear rejects at least one such echo outright —
+// `organizationUpdate` answers `invalid input: non-unique organization url key`
+// when it receives the organization's own unchanged `urlKey` — which made every
+// update of this resource fail regardless of what the configuration changed.
+// Diffing keeps the "an omitted attribute keeps its live value" promise while
+// sending nothing Linear can object to.
+func (r *workspaceSettingsResource) apply(ctx context.Context, plan, prior *workspaceSettingsModel, diags *diag.Diagnostics, state *tfsdk.State) {
 	in, err := plan.input(ctx)
 	if err != nil {
 		diags.AddError("Unable to build Linear workspace settings input", err.Error())
+		return
+	}
+
+	if prior != nil {
+		before, err := prior.input(ctx)
+		if err != nil {
+			diags.AddError("Unable to build Linear workspace settings input", err.Error())
+			return
+		}
+		// Both sides are built by the same code, so a JSON attribute is compared
+		// as decoded values rather than as text — a reformatted but equivalent
+		// document is correctly seen as unchanged.
+		for key, was := range before {
+			if reflect.DeepEqual(in[key], was) {
+				delete(in, key)
+			}
+		}
+	}
+
+	// Nothing moved: skip the mutation entirely and refresh from the API, so
+	// state still ends up holding what is live.
+	if len(in) == 0 {
+		raw, err := r.readOrganization(ctx)
+		if err != nil {
+			diags.AddError("Unable to read Linear workspace settings", err.Error())
+			return
+		}
+		if err := plan.decode(ctx, raw); err != nil {
+			diags.AddError("Unable to read Linear workspace settings", err.Error())
+			return
+		}
+		diags.Append(state.Set(ctx, plan)...)
 		return
 	}
 

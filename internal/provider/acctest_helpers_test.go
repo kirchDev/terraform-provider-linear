@@ -92,6 +92,13 @@ type linearMock struct {
 	// roots maps operation keyword ("query" / "mutation") → the root type its
 	// outermost selection is validated against. See exposeRoot.
 	roots map[string]exposedType
+
+	// updates maps entity name → the inputs its update mutation was called with,
+	// in order. The stored entity cannot answer what a mutation *sent*: store
+	// merges the input onto what was already there, so a field that was seeded
+	// looks identical whether the provider sent it or not. Asserting that an
+	// attribute is NOT sent needs the raw input, which is what this keeps.
+	updates map[string][]map[string]any
 }
 
 // exposedType is one Linear type's readable surface.
@@ -460,6 +467,15 @@ func (m *linearMock) only(t *testing.T, name string) map[string]any {
 	return nil
 }
 
+// updateInputs returns every input the entity's update mutation was called
+// with, in order. Use it to assert what a mutation did NOT send — `only` reads
+// the merged result and cannot tell an unsent field from an unchanged one.
+func (m *linearMock) updateInputs(name string) []map[string]any {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.updates[name]
+}
+
 // seedSingleton pre-stores the one entity of a kind that exists without anyone
 // having created it. The workspace is Linear's: there is no organizationCreate,
 // `query organization` takes no id, and organizationUpdate updates whatever the
@@ -536,6 +552,10 @@ func (m *linearMock) update(w http.ResponseWriter, name string, req mockRequest)
 		return
 	}
 	input, _ := req.Variables["input"].(map[string]any)
+	if m.updates == nil {
+		m.updates = map[string][]map[string]any{}
+	}
+	m.updates[name] = append(m.updates[name], input)
 
 	stored := m.store(name, id, input, existing)
 	m.writeData(w, map[string]any{
