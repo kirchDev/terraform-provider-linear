@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.2](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.1...v0.2.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* **ci:** let the queue PR body wrap itself ([b660a91](https://github.com/kirchDev/terraform-provider-linear/commit/b660a910ac0662cd9a8a9dc935f893cc1a7a1348))
+* keep an unset optional-and-computed attribute's value in the plan ([#28](https://github.com/kirchDev/terraform-provider-linear/issues/28)) ([61fd2d2](https://github.com/kirchDev/terraform-provider-linear/commit/61fd2d2932dcd3528e7711d805eace6014169d25))
+* keep live values a configuration does not mention ([#26](https://github.com/kirchDev/terraform-provider-linear/issues/26)) ([6cbf58b](https://github.com/kirchDev/terraform-provider-linear/commit/6cbf58bd727ec1126fb7da8f717e42a752d3aeff))
+* read "" on a reference attribute as an explicit clear ([#29](https://github.com/kirchDev/terraform-provider-linear/issues/29)) ([2042b8d](https://github.com/kirchDev/terraform-provider-linear/commit/2042b8dd0a443388df71e6cd84258683d0e2fad6))
+
 ## [0.2.1](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.0...v0.2.1) (2026-08-04)
 
 
