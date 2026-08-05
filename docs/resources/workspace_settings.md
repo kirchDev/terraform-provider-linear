@@ -36,11 +36,15 @@ resource "linear_workspace_settings" "this" {
   customers_enabled = true
 
   # Member invitation, team creation and label management restrictions live in
-  # security settings — Linear moved them off the top level.
+  # security settings — Linear moved them off the top level. Each value is the
+  # minimum role the setting requires, never a boolean: "user" leaves it to
+  # every workspace member, "admin" restricts it to admins.
   security_settings_json = jsonencode({
-    allowMembersToInvite            = false
-    restrictTeamCreationToAdmins    = true
-    restrictLabelManagementToAdmins = true
+    invitationsRole        = "user"
+    teamCreationRole       = "admin"
+    labelManagementRole    = "user"
+    templateManagementRole = "user"
+    personalApiKeysRole    = "admin"
   })
 }
 ```
@@ -91,7 +95,7 @@ resource "linear_workspace_settings" "this" {
 - `reduced_personal_information` (Boolean) Whether Linear minimises the personal information it stores. **Write-only**, for the same reason as `sla_enabled`.
 - `restrict_agent_invocation_to_members` (Boolean) Whether only workspace members — not guests — may invoke agents.
 - `roadmap_enabled` (Boolean) Whether Initiatives are available in the workspace. Linear renamed the feature to Initiatives; its API still calls the field `roadmapEnabled`, the name it shipped under. This is the workspace-level toggle — `linear_team.initiatives_enabled` is the per-team one.
-- `security_settings_json` (String) Workspace security settings as a JSON object — this is where member invitation, team creation and label management restrictions live now, e.g. `jsonencode({ allowMembersToInvite = false, restrictTeamCreationToAdmins = true })`. Compared semantically.
+- `security_settings_json` (String) Workspace security settings as a JSON object — this is where member invitation, team creation and label management restrictions live now. Every value is the **minimum role** the setting requires rather than a boolean: `user` leaves it to every workspace member, `admin` restricts it to admins. The keys Linear reports are `invitationsRole`, `teamCreationRole`, `labelManagementRole`, `templateManagementRole` and `personalApiKeysRole`, e.g. `jsonencode({ invitationsRole = "user", teamCreationRole = "admin" })`. Compared semantically.
 - `sla_enabled` (Boolean) Whether SLAs are enabled. **Write-only** — Linear accepts it but does not report it back, so drift in this attribute cannot be detected.
 - `slack_auto_create_project_channel` (Boolean) Whether a Slack channel is created for every new project.
 - `slack_project_channel_integration_id` (String) UUID of the Slack integration project channels are created through.

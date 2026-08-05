@@ -3,9 +3,15 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	// `resource` in this file is the acceptance-testing helper, so the framework
+	// package the Schema method takes its request and response from is aliased.
+	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
@@ -49,6 +55,39 @@ const organizationTypeFields = `
 	templates{TemplateConnection!} themeSettings trialEndsAt trialStartsAt updatedAt urlKey
 	userCount users{UserConnection!} workingDays
 `
+
+// organizationSecuritySettingsInputFields is every key `securitySettings`
+// accepts, copied from Linear's own SDL — `bash scripts/fetch-schema.sh`, then:
+//
+//	awk '/^input OrganizationSecuritySettingsInput \{/,/^\}/' .linear-schema.graphql |
+//	  grep -E '^  [a-zA-Z]+:' | sed 's/:.*//'
+//
+// Like organizationTypeFields above it is a snapshot of the API's contract
+// rather than a restatement of what the provider sends — `securitySettings` is
+// a JSONObject, so nothing in the provider or in Terraform ever checks a key
+// written into it.
+const organizationSecuritySettingsInputFields = `
+	agentGuidanceRole apiSettingsRole automationManagementRole importRole integrationCreationRole
+	invitationsRole labelManagementRole personalApiKeysRole teamCreationRole templateManagementRole
+	workspaceInitiativesRole
+`
+
+// userRoleTypeValues is `enum UserRoleType`, from the same SDL. Every key of
+// OrganizationSecuritySettingsInput takes one — the *minimum role* the setting
+// requires — so the object holds no booleans at all. `user` and `admin` are the
+// two a security setting is written with in practice.
+const userRoleTypeValues = `admin app guest owner user`
+
+// deprecatedOrganizationRestrictionFields are the top-level Organization fields
+// the role ladder replaced. The SDL still carries them, each deprecated with
+// "Use `securitySettings.<x>Role` instead", and this provider exposes none of
+// them — so naming one in the documentation of security_settings_json points a
+// practitioner at a key that object does not have.
+var deprecatedOrganizationRestrictionFields = []string{
+	"allowMembersToInvite",
+	"restrictTeamCreationToAdmins",
+	"restrictLabelManagementToAdmins",
+}
 
 // seedWorkspace stands the workspace singleton up in the mock. There is no
 // organizationCreate to reach it through, so without this the very first
@@ -174,6 +213,129 @@ func TestWorkspaceSettingsDecodeNullIPRestrictions(t *testing.T) {
 	if !m.IPRestrictionsJSON.IsNull() {
 		t.Fatalf("want null ip_restrictions_json, got %q", m.IPRestrictionsJSON.ValueString())
 	}
+}
+
+// security_settings_json carries raw JSON, so no layer between the practitioner
+// and Linear checks the keys a configuration puts in it: the provider forwards
+// the object, and Terraform only compares it. The attribute is also Optional +
+// Computed and compared semantically, so a wrong key does not error either —
+// the apply writes something Linear ignores and the plan never converges. The
+// example and the attribute description are therefore the whole of what a
+// practitioner has to go on, and tfplugindocs renders both into
+// docs/resources/workspace_settings.md verbatim.
+//
+// They shipped naming allowMembersToInvite / restrictTeamCreationToAdmins /
+// restrictLabelManagementToAdmins with boolean values. Those are the deprecated
+// top-level Organization fields, not keys of securitySettings, and that object
+// holds no booleans at all — every key of it takes a UserRoleType.
+func TestWorkspaceSettingsExampleUsesRealSecuritySettingsKeys(t *testing.T) {
+	path := filepath.Join(examplesDir(t), "resources", "linear_workspace_settings", "resource.tf")
+	pairs := parseJSONEncodeBlock(t, path, "security_settings_json")
+	if len(pairs) == 0 {
+		t.Fatalf("%s: the security_settings_json example is empty, so it documents nothing", path)
+	}
+
+	accepted := nameSet(organizationSecuritySettingsInputFields)
+	roles := nameSet(userRoleTypeValues)
+
+	for _, pair := range pairs {
+		if !accepted[pair.key] {
+			t.Errorf("%s: security_settings_json sets %q, which OrganizationSecuritySettingsInput does not accept",
+				path, pair.key)
+		}
+		role, opened := strings.CutPrefix(pair.value, `"`)
+		role, closed := strings.CutSuffix(role, `"`)
+		if !opened || !closed || !roles[role] {
+			t.Errorf("%s: security_settings_json sets %s = %s; every key takes a UserRoleType (%s), never a boolean",
+				path, pair.key, pair.value, strings.Join(strings.Fields(userRoleTypeValues), ", "))
+		}
+	}
+}
+
+// The description is the other half of the same page — the attribute reference
+// tfplugindocs renders under ### Optional — and it carried the same three
+// deprecated field names as the example did.
+func TestWorkspaceSettingsSecuritySettingsDescriptionNamesRealKeys(t *testing.T) {
+	var schemaResp frameworkresource.SchemaResponse
+	NewWorkspaceSettingsResource().Schema(context.Background(), frameworkresource.SchemaRequest{}, &schemaResp)
+
+	attr, ok := schemaResp.Schema.Attributes["security_settings_json"]
+	if !ok {
+		t.Fatal("linear_workspace_settings has no security_settings_json attribute")
+	}
+	description := attr.GetMarkdownDescription()
+
+	for _, field := range deprecatedOrganizationRestrictionFields {
+		if strings.Contains(description, field) {
+			t.Errorf("security_settings_json is described in terms of %s, a deprecated top-level "+
+				"Organization field rather than a key of securitySettings", field)
+		}
+	}
+
+	accepted := nameSet(organizationSecuritySettingsInputFields)
+	for _, name := range strings.Split(description, "`") {
+		if strings.HasSuffix(name, "Role") && !accepted[name] {
+			t.Errorf("security_settings_json names the key %q, which OrganizationSecuritySettingsInput "+
+				"does not accept", name)
+		}
+	}
+}
+
+// nameSet turns one of the whitespace-separated SDL snapshots above into a set.
+func nameSet(names string) map[string]bool {
+	set := map[string]bool{}
+	for _, name := range strings.Fields(names) {
+		set[name] = true
+	}
+	return set
+}
+
+type jsonEncodePair struct{ key, value string }
+
+// parseJSONEncodeBlock reads the `key = value` pairs out of an
+// `<attribute> = jsonencode({ … })` block in a Terraform example. Enough of a
+// parser for the flat, one-pair-per-line objects the examples are written with,
+// and deliberately no more: anything it cannot read is a failure rather than a
+// silent skip, so an example it stops recognising cannot quietly go unchecked.
+func parseJSONEncodeBlock(t *testing.T, path, attribute string) []jsonEncodePair {
+	t.Helper()
+
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+
+	lines := strings.Split(string(src), "\n")
+	body := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, attribute+" ") && strings.Contains(trimmed, "jsonencode({") {
+			body = i + 1
+			break
+		}
+	}
+	if body < 0 {
+		t.Fatalf("%s: no `%s = jsonencode({` block", path, attribute)
+	}
+
+	var pairs []jsonEncodePair
+	for _, line := range lines[body:] {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "})") {
+			return pairs
+		}
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(trimmed, "=")
+		if !ok {
+			t.Fatalf("%s: cannot read %q as a `key = value` pair", path, trimmed)
+		}
+		pairs = append(pairs, jsonEncodePair{strings.TrimSpace(key), strings.TrimSpace(value)})
+	}
+
+	t.Fatalf("%s: the `%s = jsonencode({` block is never closed", path, attribute)
+	return nil
 }
 
 // sameJSON compares two JSON documents the way the ip_restrictions_json
