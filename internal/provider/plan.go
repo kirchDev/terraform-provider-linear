@@ -1,6 +1,9 @@
 package provider
 
 import (
+	"context"
+
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -67,4 +70,72 @@ func keepList(extra ...planmodifier.List) []planmodifier.List {
 // keepSet returns the plan modifiers an Optional+Computed set carries.
 func keepSet(extra ...planmodifier.Set) []planmodifier.Set {
 	return append([]planmodifier.Set{setplanmodifier.UseStateForUnknown()}, extra...)
+}
+
+// keepJSON returns the plan modifiers a jsontypes.Normalized attribute carries.
+//
+// The unknown half is keepString's, for the same reason. The second modifier
+// answers a different half of the same promise: every one of these attributes is
+// documented as "compared semantically", and on the apply it is — Linear
+// normalises what it stores, so the value that comes back is the same document
+// re-serialised, and both the update diff and the framework's own consistency
+// check compare the parsed documents rather than the bytes.
+//
+// The plan is where that stops being true. terraform-plugin-framework applies a
+// custom type's semantic equality in Create, Read and Update, and nowhere in
+// PlanResourceChange — so the planned value is exactly the bytes the
+// configuration wrote, and Terraform renders it against a differently-formatted
+// state as `# whitespace changes`.
+//
+// Every path where the two spellings can diverge ends here: an import, where
+// state holds Linear's serialisation and the configuration holds a
+// practitioner's, and any configuration reformatted after the fact. Nothing
+// converges it, either — Read keeps the prior value precisely because it is
+// semantically equal, so the plan repeats unchanged forever.
+func keepJSON(extra ...planmodifier.String) []planmodifier.String {
+	return append([]planmodifier.String{
+		stringplanmodifier.UseStateForUnknown(),
+		semanticallyEqualJSON{},
+	}, extra...)
+}
+
+// semanticallyEqualJSON plans the document already in state whenever the one the
+// configuration asks for differs from it in formatting alone.
+type semanticallyEqualJSON struct{}
+
+func (semanticallyEqualJSON) Description(_ context.Context) string {
+	return "Keeps the value in state when the configuration differs from it in JSON formatting alone."
+}
+
+func (m semanticallyEqualJSON) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (semanticallyEqualJSON) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// Nothing to keep while the resource is being created, and nothing to plan
+	// while it is being destroyed.
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	// A null or unknown on either side is not a formatting difference. The
+	// unknown case is keepString's modifier's, and it has already run.
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() ||
+		req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
+		return
+	}
+
+	// The attribute's own comparison, rather than a second implementation of it:
+	// this has to agree with what the framework does after the apply, or the
+	// plan and the consistency check disagree about the same two documents.
+	equal, diags := jsontypes.NewNormalizedValue(req.StateValue.ValueString()).
+		StringSemanticEquals(ctx, jsontypes.NewNormalizedValue(req.PlanValue.ValueString()))
+	if diags.HasError() || !equal {
+		// A document that cannot be parsed is left alone rather than reported:
+		// the custom type already validates the configuration's JSON with a
+		// message of its own, and the plan is not the place to fail over
+		// something the provider itself wrote to state.
+		return
+	}
+
+	resp.PlanValue = req.StateValue
 }

@@ -14,8 +14,10 @@ import (
 	// package the Schema method takes its request and response from is aliased.
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 // organizationTypeFields is what `type Organization` exposes, copied from
@@ -215,6 +217,114 @@ resource "linear_workspace_settings" "test" {
 						return fmt.Errorf("update sent %d fields, want only the changed one: %#v", len(in), in)
 					}
 					return nil
+				},
+			},
+		},
+	})
+}
+
+// releases_enabled is the one attribute on this resource Linear reports but
+// organizationUpdate cannot set, so it is Computed alone rather than
+// Optional + Computed — which is exactly how it slipped past the guard that
+// gave every other attribute here its prior value back. A Computed attribute
+// with no configuration value is marked "(known after apply)" the moment
+// anything else on the resource moves, and this one has a perfectly good value
+// sitting in state that the apply is not going to touch.
+//
+// The assertion is on the plan rather than on the applied result: what is wrong
+// is what a practitioner reads before approving an irreversible apply, and the
+// value that comes back afterwards was never in doubt.
+func TestAccWorkspaceSettings_unsetReleasesEnabledKeepsItsPriorValue(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("organization", "Organization", organizationTypeFields)
+	seedWorkspace(mock)
+	mock.fill(t, "organization", "", map[string]any{"releasesEnabled": true})
+	srv := mock.server(t)
+
+	const adopt = `
+resource "linear_workspace_settings" "test" {
+  name = "kirchDev"
+}
+`
+	// One real change, on an attribute that has nothing to do with releases.
+	const renamed = `
+resource "linear_workspace_settings" "test" {
+  name = "IT-Dienstleistungen Titus Kirch"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + adopt,
+				Check: resource.TestCheckResourceAttr(
+					"linear_workspace_settings.test", "releases_enabled", "true"),
+			},
+			{
+				Config: providerConfig(srv.URL) + renamed,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectKnownValue(
+						"linear_workspace_settings.test",
+						tfjsonpath.New("releases_enabled"),
+						knownvalue.Bool(true),
+					)},
+				},
+			},
+		},
+	})
+}
+
+// The JSON attributes are documented as "Compared semantically", and on the
+// apply they are: both sides of the update diff are built by the same code, so
+// a reformatted but equivalent document is correctly seen as unchanged. The
+// plan is the half that was missing. terraform-plugin-framework applies a
+// custom type's semantic equality in Create, Read and Update and nowhere in
+// PlanResourceChange, so the planned value stays exactly the bytes the
+// configuration wrote — and Terraform renders the difference against state as
+// `# whitespace changes`.
+//
+// Import is where it bites, because that is the one path where state holds
+// Linear's serialisation rather than the configuration's: an adopted workspace
+// plans a change forever, on an attribute whose content is identical.
+func TestAccWorkspaceSettings_reformattedSecuritySettingsAreNotAChange(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("organization", "Organization", organizationTypeFields)
+	seedWorkspace(mock)
+	mock.fill(t, "organization", "", map[string]any{"securitySettings": map[string]any{
+		"invitationsRole":  "user",
+		"teamCreationRole": "admin",
+	}})
+	srv := mock.server(t)
+
+	// The same object the API reports, written the way a practitioner writes it:
+	// indented, and in the order the settings are thought about rather than the
+	// order Go's encoder emits them in. Nothing here differs but the formatting.
+	const config = `
+resource "linear_workspace_settings" "test" {
+  security_settings_json = <<-EOT
+    {
+      "teamCreationRole": "admin",
+      "invitationsRole": "user"
+    }
+  EOT
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             providerConfig(srv.URL) + config,
+				ResourceName:       "linear_workspace_settings.test",
+				ImportState:        true,
+				ImportStateId:      "workspace",
+				ImportStatePersist: true,
+			},
+			{
+				Config: providerConfig(srv.URL) + config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 			},
 		},

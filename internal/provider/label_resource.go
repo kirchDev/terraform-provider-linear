@@ -166,7 +166,8 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 	attrs["team_id"] = schema.StringAttribute{
 		MarkdownDescription: "Always null — a workspace label belongs to no team. Present so the attribute set " +
 			"matches `linear_team_label`.",
-		Computed: true,
+		Computed:      true,
+		PlanModifiers: keepString(),
 	}
 	return schema.Schema{
 		MarkdownDescription: "Manages a workspace-wide issue label in Linear — available to every team.\n\n" +

@@ -153,7 +153,7 @@ func customViewSchema() schema.Schema {
 			Validators: []validator.String{
 				stringvalidator.ConflictsWith(filterPaths...),
 			},
-			PlanModifiers: keepString(),
+			PlanModifiers: keepJSON(),
 		}
 	}
 
