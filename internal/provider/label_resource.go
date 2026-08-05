@@ -84,16 +84,18 @@ func (m *issueLabelModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.Color = stringOrNull(a.Color)
 	m.Description = types.StringPointerValue(a.Description)
 	m.IsGroup = types.BoolValue(a.IsGroup)
-	m.ParentID = refID(a.Parent)
+	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 	m.TeamID = refID(a.Team)
 	return nil
 }
 
 func (m *issueLabelModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
+	// Optional + Computed throughout, so clear=false: an attribute the
+	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "parentId", m.ParentID, forUpdate)
+	putString(in, "description", m.Description, false)
+	putRef(in, "parentId", m.ParentID)
 	// isGroup and teamId only exist on the create input.
 	if !forUpdate {
 		putBool(in, "isGroup", m.IsGroup, false)
@@ -122,10 +124,13 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 			MarkdownDescription: "Colour of the label as a hex string, e.g. `#5e6ad2`. Linear picks one when unset.",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 		"description": schema.StringAttribute{
 			MarkdownDescription: "Description of the label.",
 			Optional:            true,
+			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 		"is_group": schema.BoolAttribute{
 			MarkdownDescription: "Whether the label is a group — a container other labels nest under, which cannot " +
@@ -136,8 +141,10 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 			PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
 		},
 		"parent_id": schema.StringAttribute{
-			MarkdownDescription: "UUID of the parent label group this label nests under.",
+			MarkdownDescription: "UUID of the parent label group this label nests under." + clearWithEmptyString,
 			Optional:            true,
+			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 	}
 

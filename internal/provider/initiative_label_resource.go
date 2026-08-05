@@ -48,15 +48,17 @@ func (m *initiativeLabelModel) decode(_ context.Context, raw json.RawMessage) er
 	m.Color = stringOrNull(a.Color)
 	m.Description = types.StringPointerValue(a.Description)
 	m.IsGroup = types.BoolValue(a.IsGroup)
-	m.ParentID = refID(a.Parent)
+	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 	return nil
 }
 
 func (m *initiativeLabelModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
+	// Optional + Computed throughout, so clear=false: an attribute the
+	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "parentId", m.ParentID, forUpdate)
+	putString(in, "description", m.Description, false)
+	putRef(in, "parentId", m.ParentID)
 	if !forUpdate {
 		putBool(in, "isGroup", m.IsGroup, false)
 	}

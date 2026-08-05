@@ -183,7 +183,7 @@ func (m *teamModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.Color = types.StringPointerValue(a.Color)
 	m.Private = types.BoolValue(a.Private)
 	m.Timezone = types.StringValue(a.Timezone)
-	m.ParentID = refID(a.Parent)
+	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 
 	m.CyclesEnabled = types.BoolValue(a.CyclesEnabled)
 	m.CycleStartDay = types.Float64Value(a.CycleStartDay)
@@ -199,7 +199,7 @@ func (m *teamModel) decode(_ context.Context, raw json.RawMessage) error {
 
 	m.AutoArchivePeriod = types.Float64Value(a.AutoArchivePeriod)
 	m.AutoClosePeriod = types.Float64PointerValue(a.AutoClosePeriod)
-	m.AutoCloseStateID = types.StringPointerValue(a.AutoCloseStateID)
+	m.AutoCloseStateID = keepCleared(m.AutoCloseStateID, types.StringPointerValue(a.AutoCloseStateID))
 	m.AutoCloseParentIssues = types.BoolPointerValue(a.AutoCloseParentIssues)
 	m.AutoCloseChildIssues = types.BoolPointerValue(a.AutoCloseChildIssues)
 
@@ -223,10 +223,11 @@ func (m *teamModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.AllMembersCanJoin = types.BoolPointerValue(a.AllMembersCanJoin)
 	m.JoinByDefault = types.BoolPointerValue(a.JoinByDefault)
 
-	m.DefaultIssueStateID = refID(a.DefaultIssueState)
-	m.DefaultProjectTemplateID = refID(a.DefaultProjectTemplate)
-	m.DefaultTemplateForMembersID = refID(a.DefaultTemplateForMembers)
-	m.DefaultTemplateForNonMembersID = refID(a.DefaultTemplateForNonMembers)
+	m.DefaultIssueStateID = keepCleared(m.DefaultIssueStateID, refID(a.DefaultIssueState))
+	m.DefaultProjectTemplateID = keepCleared(m.DefaultProjectTemplateID, refID(a.DefaultProjectTemplate))
+	m.DefaultTemplateForMembersID = keepCleared(m.DefaultTemplateForMembersID, refID(a.DefaultTemplateForMembers))
+	m.DefaultTemplateForNonMembersID = keepCleared(
+		m.DefaultTemplateForNonMembersID, refID(a.DefaultTemplateForNonMembers))
 
 	m.SecuritySettingsJSON = jsonAttr(a.SecuritySettings)
 	return nil
@@ -254,13 +255,20 @@ func (m *teamModel) needsUpdateAfterCreate() bool {
 func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
 
+	// Every readable attribute passes clear=false: they are all Optional +
+	// Computed, so an absent value means "keep what is live" rather than "clear
+	// it". Sending null for what the configuration does not mention would erase
+	// settings a human set in the UI — an icon, a default issue state — on the
+	// first apply after import.
 	putString(in, "key", m.Key, false)
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "icon", m.Icon, forUpdate)
-	putString(in, "color", m.Color, forUpdate)
+	putString(in, "description", m.Description, false)
+	putString(in, "icon", m.Icon, false)
+	putString(in, "color", m.Color, false)
 	putBool(in, "private", m.Private, false)
 	putString(in, "timezone", m.Timezone, false)
-	putString(in, "parentId", m.ParentID, forUpdate)
+	// The reference attributes go through putRef, which reads `""` as an explicit
+	// clear — the one intent Optional + Computed otherwise leaves unsayable.
+	putRef(in, "parentId", m.ParentID)
 
 	putBool(in, "cyclesEnabled", m.CyclesEnabled, false)
 	putFloat(in, "cycleStartDay", m.CycleStartDay, false)
@@ -276,7 +284,7 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 
 	putFloat(in, "autoArchivePeriod", m.AutoArchivePeriod, false)
 	putFloat(in, "autoClosePeriod", m.AutoClosePeriod, false)
-	putString(in, "autoCloseStateId", m.AutoCloseStateID, forUpdate)
+	putRef(in, "autoCloseStateId", m.AutoCloseStateID)
 
 	putFloat(in, "defaultIssueEstimate", m.DefaultIssueEstimate, false)
 	putString(in, "issueEstimationType", m.IssueEstimationType, false)
@@ -292,9 +300,9 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 	putBool(in, "inheritSlackAutoCreateProjectChannel", m.InheritSlackAutoCreateProjectChannel, false)
 	putBool(in, "slackAutoCreateProjectChannel", m.SlackAutoCreateProjectChannel, false)
 
-	putString(in, "defaultProjectTemplateId", m.DefaultProjectTemplateID, forUpdate)
-	putString(in, "defaultTemplateForMembersId", m.DefaultTemplateForMembersID, forUpdate)
-	putString(in, "defaultTemplateForNonMembersId", m.DefaultTemplateForNonMembersID, forUpdate)
+	putRef(in, "defaultProjectTemplateId", m.DefaultProjectTemplateID)
+	putRef(in, "defaultTemplateForMembersId", m.DefaultTemplateForMembersID)
+	putRef(in, "defaultTemplateForNonMembersId", m.DefaultTemplateForNonMembersID)
 
 	// Write-only: on both team inputs, on neither the Team type nor the
 	// selection set above.
@@ -310,27 +318,42 @@ func (m *teamModel) input(_ context.Context, forUpdate bool) map[string]any {
 		putBool(in, "joinByDefault", m.JoinByDefault, false)
 		putBool(in, "autoCloseParentIssues", m.AutoCloseParentIssues, false)
 		putBool(in, "autoCloseChildIssues", m.AutoCloseChildIssues, false)
-		putString(in, "defaultIssueStateId", m.DefaultIssueStateID, true)
+		putRef(in, "defaultIssueStateId", m.DefaultIssueStateID)
 		_ = putJSON(in, "securitySettings", m.SecuritySettingsJSON, false)
 	}
 	return in
 }
 
 func teamSchema() schema.Schema {
-	// Every configurable attribute is Optional + Computed: Linear defaults each
-	// one, and an attribute the config leaves out must keep its live value rather
-	// than being reset.
+	// Every attribute Linear reports back is Optional + Computed, so an attribute
+	// the configuration leaves out keeps its live value rather than being reset.
+	// The trade-off is deliberate and the one linear_workspace_settings already
+	// accepted: removing an attribute from the configuration no longer clears it,
+	// so unsetting one means setting it explicitly. On a resource whose fields are
+	// workspace state a human also edits in the UI, silently erasing what nobody
+	// wrote down is the worse failure by far.
+	//
+	// The exceptions are the write-only attributes at the bottom, which Linear
+	// accepts but never returns — Computed there would fail every apply.
 	optBool := func(desc string) schema.Attribute {
-		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.BoolAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepBool(),
+		}
 	}
 	optString := func(desc string) schema.Attribute {
-		return schema.StringAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.StringAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepString(),
+		}
 	}
 	optFloat := func(desc string) schema.Attribute {
-		return schema.Float64Attribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.Float64Attribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepFloat(),
+		}
 	}
 	optInt := func(desc string) schema.Attribute {
-		return schema.Int64Attribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.Int64Attribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepInt(),
+		}
 	}
 
 	return schema.Schema{
@@ -348,18 +371,21 @@ func teamSchema() schema.Schema {
 				MarkdownDescription: "Name of the team.",
 				Required:            true,
 			},
+			// No keepString() here, deliberately: the key is derived from the
+			// name, so on a rename it really is not knowable until Linear has
+			// answered. See plan.go and derivedFromAnotherAttribute.
 			"key": schema.StringAttribute{
 				MarkdownDescription: "Team key — the prefix of every issue identifier, e.g. `ENG` in `ENG-42`. " +
 					"Linear derives one from the name when unset.",
 				Optional: true,
 				Computed: true,
 			},
-			"description": schema.StringAttribute{MarkdownDescription: "Description of the team.", Optional: true},
-			"icon":        schema.StringAttribute{MarkdownDescription: "Icon of the team.", Optional: true},
-			"color":       schema.StringAttribute{MarkdownDescription: "Colour of the team as a hex string.", Optional: true},
+			"description": optString("Description of the team."),
+			"icon":        optString("Icon of the team."),
+			"color":       optString("Colour of the team as a hex string."),
 			"private":     optBool("Whether the team is private — visible only to its members."),
 			"timezone":    optString("Timezone the team's cycles and SLAs are computed in, e.g. `Europe/Berlin`."),
-			"parent_id":   schema.StringAttribute{MarkdownDescription: "UUID of the parent team this team nests under.", Optional: true},
+			"parent_id":   optString("UUID of the parent team this team nests under." + clearWithEmptyString),
 
 			"cycles_enabled":                    optBool("Whether Linear generates cycles for the team."),
 			"cycle_start_day":                   optFloat("Weekday cycles start on, `0` being Sunday."),
@@ -377,10 +403,8 @@ func teamSchema() schema.Schema {
 			"auto_close_period": optFloat("Months of inactivity after which an open issue is closed. Linear " +
 				"reports whether auto-closing is on at all, so removing the attribute keeps the live value rather " +
 				"than disabling it — set it explicitly to change it."),
-			"auto_close_state_id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the workflow state auto-closed issues move to.",
-				Optional:            true,
-			},
+			"auto_close_state_id": optString(
+				"UUID of the workflow state auto-closed issues move to." + clearWithEmptyString),
 			"auto_close_parent_issues": optBool("Whether closing every sub-issue auto-closes the parent."),
 			"auto_close_child_issues":  optBool("Whether closing a parent issue auto-closes its sub-issues."),
 
@@ -408,32 +432,25 @@ func teamSchema() schema.Schema {
 			"all_members_can_join": optBool("Whether any workspace member can join the team without an invite."),
 			"join_by_default":      optBool("Whether new workspace members join this team automatically."),
 
-			"default_issue_state_id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the workflow state new issues start in.",
-				Optional:            true,
-			},
-			"default_project_template_id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the `linear_template` new projects of this team start from.",
-				Optional:            true,
-			},
-			"default_template_for_members_id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the `linear_template` used for issues created by team members.",
-				Optional:            true,
-			},
-			"default_template_for_non_members_id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the `linear_template` used for issues created by people outside " +
-					"the team.",
-				Optional: true,
-			},
+			"default_issue_state_id": optString(
+				"UUID of the workflow state new issues start in." + clearWithEmptyString),
+			"default_project_template_id": optString(
+				"UUID of the `linear_template` new projects of this team start from." + clearWithEmptyString),
+			"default_template_for_members_id": optString(
+				"UUID of the `linear_template` used for issues created by team members." + clearWithEmptyString),
+			"default_template_for_non_members_id": optString(
+				"UUID of the `linear_template` used for issues created by people outside the team." +
+					clearWithEmptyString),
 
 			"security_settings_json": schema.StringAttribute{
 				MarkdownDescription: "Team security settings as a JSON object — which role may manage what, e.g. " +
 					"`jsonencode({ labelManagement = \"admin\", templateManagement = \"member\" })`. Keys: " +
 					"`agentSkillsManagement`, `automationManagement`, `issueSharing`, `labelManagement`, " +
 					"`memberManagement`, `teamManagement`, `templateManagement`. Compared semantically.",
-				Optional:   true,
-				Computed:   true,
-				CustomType: jsontypes.NormalizedType{},
+				Optional:      true,
+				Computed:      true,
+				CustomType:    jsontypes.NormalizedType{},
+				PlanModifiers: keepString(),
 			},
 
 			// Linear accepts these on the input but does not return them on the Team

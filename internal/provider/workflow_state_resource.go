@@ -73,7 +73,7 @@ func (m *workflowStateModel) input(_ context.Context, forUpdate bool) map[string
 		"name":  m.Name.ValueString(),
 		"color": m.Color.ValueString(),
 	}
-	putString(in, "description", m.Description, forUpdate)
+	putString(in, "description", m.Description, false)
 	putFloat(in, "position", m.Position, false)
 	// Neither type nor teamId exists on WorkflowStateUpdateInput — both are
 	// RequiresReplace in the schema for exactly that reason.
@@ -112,6 +112,8 @@ func workflowStateSchema() schema.Schema {
 			"description": schema.StringAttribute{
 				MarkdownDescription: "Description of the state.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			// Deliberately a plain string, not an enum: Linear types this field as
 			// String and `duplicate` is a real value the API returns. Modelling it as
@@ -128,6 +130,7 @@ func workflowStateSchema() schema.Schema {
 				MarkdownDescription: "Sort position of the state within its category. Linear assigns one when unset.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       keepFloat(),
 			},
 		},
 	}

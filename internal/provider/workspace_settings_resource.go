@@ -400,13 +400,19 @@ func (r *workspaceSettingsResource) Metadata(_ context.Context, req resource.Met
 
 func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	optBool := func(desc string) schema.Attribute {
-		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.BoolAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepBool(),
+		}
 	}
 	optString := func(desc string) schema.Attribute {
-		return schema.StringAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.StringAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepString(),
+		}
 	}
 	optFloat := func(desc string) schema.Attribute {
-		return schema.Float64Attribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.Float64Attribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepFloat(),
+		}
 	}
 	optJSON := func(desc string) schema.Attribute {
 		return schema.StringAttribute{
@@ -414,6 +420,7 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 			Optional:            true,
 			Computed:            true,
 			CustomType:          jsontypes.NormalizedType{},
+			PlanModifiers:       keepString(),
 		}
 	}
 	writeOnlyBool := func(desc string) schema.Attribute {
@@ -451,6 +458,7 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.Float64Type,
+				PlanModifiers:       keepList(),
 			},
 			"fiscal_year_start_month": optFloat("Month the fiscal year starts in, `0` being January."),
 
@@ -481,6 +489,7 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
+				PlanModifiers:       keepList(),
 			},
 			"hipaa_compliance_enabled": optBool("Whether HIPAA compliance mode is on."),
 
@@ -510,8 +519,12 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 			"slack_project_channel_integration_id": optString("UUID of the Slack integration project channels are created through."),
 
 			"security_settings_json": optJSON("Workspace security settings as a JSON object — this is where " +
-				"member invitation, team creation and label management restrictions live now, e.g. " +
-				"`jsonencode({ allowMembersToInvite = false, restrictTeamCreationToAdmins = true })`. " +
+				"member invitation, team creation and label management restrictions live now. Every value is " +
+				"the **minimum role** the setting requires rather than a boolean: `user` leaves it to every " +
+				"workspace member, `admin` restricts it to admins. The keys Linear reports are " +
+				"`invitationsRole`, `teamCreationRole`, `labelManagementRole`, `templateManagementRole` and " +
+				"`personalApiKeysRole`, e.g. " +
+				"`jsonencode({ invitationsRole = \"user\", teamCreationRole = \"admin\" })`. " +
 				"Compared semantically."),
 			"auth_settings_json":           optJSON("Authentication settings as a JSON object — SAML, SCIM and allowed auth services."),
 			"theme_settings_json":          optJSON("Workspace theme as a JSON object."),

@@ -54,16 +54,18 @@ func (m *projectLabelModel) decode(_ context.Context, raw json.RawMessage) error
 	m.Color = stringOrNull(a.Color)
 	m.Description = types.StringPointerValue(a.Description)
 	m.IsGroup = types.BoolValue(a.IsGroup)
-	m.ParentID = refID(a.Parent)
+	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 	m.TeamID = refID(a.Team)
 	return nil
 }
 
 func (m *projectLabelModel) input(_ context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
+	// Optional + Computed throughout, so clear=false: an attribute the
+	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
-	putString(in, "description", m.Description, forUpdate)
-	putString(in, "parentId", m.ParentID, forUpdate)
+	putString(in, "description", m.Description, false)
+	putRef(in, "parentId", m.ParentID)
 	if !forUpdate {
 		putBool(in, "isGroup", m.IsGroup, false)
 		putString(in, "teamId", m.TeamID, false)
@@ -89,10 +91,13 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			MarkdownDescription: "Colour of the label as a hex string, e.g. `#5e6ad2`. Linear picks one when unset.",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 		"description": schema.StringAttribute{
 			MarkdownDescription: "Description of the label.",
 			Optional:            true,
+			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 		"is_group": schema.BoolAttribute{
 			MarkdownDescription: "Whether the label is a group other labels nest under. Changing this replaces " +
@@ -103,8 +108,10 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
 		},
 		"parent_id": schema.StringAttribute{
-			MarkdownDescription: "UUID of the parent label group this label nests under.",
+			MarkdownDescription: "UUID of the parent label group this label nests under." + clearWithEmptyString,
 			Optional:            true,
+			Computed:            true,
+			PlanModifiers:       keepString(),
 		},
 	}
 
@@ -115,7 +122,8 @@ func groupableLabelSchema(kind string, teamScoped bool) schema.Schema {
 			MarkdownDescription: "UUID of the team the label is scoped to. Leave unset for a workspace-wide " +
 				"label. Changing it replaces the label — the update mutation has no `teamId`.",
 			Optional:      true,
-			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			Computed:      true,
+			PlanModifiers: keepString(stringplanmodifier.RequiresReplace()),
 		}
 	}
 	return schema.Schema{MarkdownDescription: desc, Attributes: attrs}

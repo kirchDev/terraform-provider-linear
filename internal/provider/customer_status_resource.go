@@ -69,7 +69,7 @@ func (m *customerStatusModel) input(_ context.Context, forUpdate bool) map[strin
 	in := map[string]any{"color": m.Color.ValueString()}
 	putString(in, "name", m.Name, false)
 	putString(in, "displayName", m.DisplayName, false)
-	putString(in, "description", m.Description, forUpdate)
+	putString(in, "description", m.Description, false)
 	putFloat(in, "position", m.Position, false)
 	return in
 }
@@ -86,6 +86,9 @@ func customerStatusSchema() schema.Schema {
 				Computed:            true,
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
+			// Neither carries keepString(), deliberately: each fills in for the
+			// other, so changing one leaves the other genuinely unknown until
+			// Linear has answered. See plan.go and derivedFromAnotherAttribute.
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Internal name of the status. Set at least one of `name` and `display_name`.",
 				Optional:            true,
@@ -99,6 +102,8 @@ func customerStatusSchema() schema.Schema {
 			"description": schema.StringAttribute{
 				MarkdownDescription: "Description of what the status represents.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the status indicator as a hex string, e.g. `#26b5ce`.",
@@ -107,8 +112,9 @@ func customerStatusSchema() schema.Schema {
 			"position": schema.Float64Attribute{
 				MarkdownDescription: "Sort position within the customer lifecycle. Linear appends the status at " +
 					"the end when unset.",
-				Optional: true,
-				Computed: true,
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: keepFloat(),
 			},
 		},
 	}

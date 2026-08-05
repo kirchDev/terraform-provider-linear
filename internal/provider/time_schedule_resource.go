@@ -101,8 +101,8 @@ func (m *timeScheduleModel) decode(ctx context.Context, raw json.RawMessage) err
 
 func (m *timeScheduleModel) input(ctx context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"name": m.Name.ValueString()}
-	putString(in, "externalId", m.ExternalID, forUpdate)
-	putString(in, "externalUrl", m.ExternalURL, forUpdate)
+	putString(in, "externalId", m.ExternalID, false)
+	putString(in, "externalUrl", m.ExternalURL, false)
 
 	// entries is required on create and replaces the whole rota on update, so it
 	// always goes over in full.
@@ -144,10 +144,14 @@ func timeScheduleSchema() schema.Schema {
 			"external_id": schema.StringAttribute{
 				MarkdownDescription: "Identifier of the schedule in the external system it mirrors.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"external_url": schema.StringAttribute{
 				MarkdownDescription: "URL of the schedule in the external system it mirrors.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"entries": schema.ListNestedAttribute{
 				MarkdownDescription: "Shifts making up the rota. Sending this replaces every entry — there is no " +

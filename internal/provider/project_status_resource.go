@@ -79,7 +79,7 @@ func (m *projectStatusModel) input(_ context.Context, forUpdate bool) map[string
 		"type":     m.Type.ValueString(),
 		"position": m.Position.ValueFloat64(),
 	}
-	putString(in, "description", m.Description, forUpdate)
+	putString(in, "description", m.Description, false)
 	putBool(in, "indefinite", m.Indefinite, false)
 	return in
 }
@@ -101,6 +101,8 @@ func projectStatusSchema() schema.Schema {
 			"description": schema.StringAttribute{
 				MarkdownDescription: "Description of the status.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"color": schema.StringAttribute{
 				MarkdownDescription: "Colour of the status indicator as a hex string.",

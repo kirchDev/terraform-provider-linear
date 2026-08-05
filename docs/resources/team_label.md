@@ -37,7 +37,7 @@ resource "linear_team_label" "flaky" {
 - `color` (String) Colour of the label as a hex string, e.g. `#5e6ad2`. Linear picks one when unset.
 - `description` (String) Description of the label.
 - `is_group` (Boolean) Whether the label is a group — a container other labels nest under, which cannot be applied to an issue itself. Changing this replaces the label.
-- `parent_id` (String) UUID of the parent label group this label nests under.
+- `parent_id` (String) UUID of the parent label group this label nests under. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
 
 ### Read-Only
 

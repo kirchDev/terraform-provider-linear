@@ -481,6 +481,27 @@ func (m *linearMock) seed(name, id string, fields map[string]any) {
 	m.put(name, id, fields)
 }
 
+// fill merges fields into an entity that already exists, standing in for the
+// defaults Linear applies itself to everything a mutation did not send.
+//
+// The mock is otherwise an echo — a read returns what the create input carried
+// — which quietly makes every unsent field come back as its zero value. That is
+// not what the API does, and the difference is load-bearing for anything about
+// optional-and-computed attributes: what those plan as depends on there being a
+// real value in state to keep.
+func (m *linearMock) fill(t *testing.T, name, id string, fields map[string]any) {
+	t.Helper()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	stored := m.entities[name][id]
+	if stored == nil {
+		t.Fatalf("no stored %s %q to fill", name, id)
+	}
+	for k, v := range fields {
+		stored[k] = v
+	}
+}
+
 func (m *linearMock) put(name, id string, fields map[string]any) {
 	stored := map[string]any{}
 	for k, v := range fields {

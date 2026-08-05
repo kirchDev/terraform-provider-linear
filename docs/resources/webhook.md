@@ -50,7 +50,7 @@ resource "linear_webhook" "github_sync" {
 - `label` (String) Label identifying the webhook in the Linear UI.
 - `secret` (String, Sensitive) Signing secret Linear uses for the `Linear-Signature` header, so the receiver can verify a delivery came from Linear.
 
-Write-only by design: it is sent but never read back, so it cannot surface through a refresh or a provider log. It is still stored in state — keep the state encrypted.
+**Write-only** by design: it is sent but never read back, so it cannot surface through a refresh or a provider log. It is still stored in state — keep the state encrypted.
 - `team_id` (String) UUID of the team the webhook is scoped to. Leave unset together with `all_public_teams` for a workspace-wide webhook. Changing it replaces the webhook.
 
 ### Read-Only

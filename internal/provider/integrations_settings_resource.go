@@ -147,7 +147,21 @@ func (m *integrationsSettingsModel) input(_ context.Context, forUpdate bool) map
 }
 
 func integrationsSettingsSchema() schema.Schema {
+	// The anchors are fixed at creation and Linear reports them back, so they are
+	// Optional + Computed: an anchor the configuration omits keeps whatever the
+	// resource was created against instead of planning a replace against null.
 	replaceString := func(desc string) schema.Attribute {
+		return schema.StringAttribute{
+			MarkdownDescription: desc,
+			Optional:            true,
+			Computed:            true,
+			PlanModifiers:       keepString(stringplanmodifier.RequiresReplace()),
+		}
+	}
+	// custom_view_id is the one anchor Linear never reports back, so it cannot be
+	// Computed — the value Terraform planned is not one that comes back, and the
+	// apply would fail on the mismatch.
+	writeOnlyReplaceString := func(desc string) schema.Attribute {
 		return schema.StringAttribute{
 			MarkdownDescription: desc,
 			Optional:            true,
@@ -155,7 +169,9 @@ func integrationsSettingsSchema() schema.Schema {
 		}
 	}
 	notify := func(desc string) schema.Attribute {
-		return schema.BoolAttribute{MarkdownDescription: desc, Optional: true, Computed: true}
+		return schema.BoolAttribute{
+			MarkdownDescription: desc, Optional: true, Computed: true, PlanModifiers: keepBool(),
+		}
 	}
 
 	return schema.Schema{
@@ -174,7 +190,7 @@ func integrationsSettingsSchema() schema.Schema {
 			"team_id":       replaceString("UUID of the team these settings belong to."),
 			"project_id":    replaceString("UUID of the project these settings belong to."),
 			"initiative_id": replaceString("UUID of the initiative these settings belong to."),
-			"custom_view_id": replaceString("UUID of the `linear_custom_view` these settings belong to. " +
+			"custom_view_id": writeOnlyReplaceString("UUID of the `linear_custom_view` these settings belong to. " +
 				"**Write-only**: Linear does not report which view the settings belong to, so drift in this " +
 				"attribute cannot be detected."),
 			"context_view_type": replaceString("Which surface the settings apply to when attached to a project " +

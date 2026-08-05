@@ -79,7 +79,7 @@ func (m *webhookModel) decode(ctx context.Context, raw json.RawMessage) error {
 
 func (m *webhookModel) input(ctx context.Context, forUpdate bool) map[string]any {
 	in := map[string]any{"url": m.URL.ValueString()}
-	putString(in, "label", m.Label, forUpdate)
+	putString(in, "label", m.Label, false)
 	putBool(in, "enabled", m.Enabled, false)
 	putString(in, "secret", m.Secret, false)
 	_ = putStringSet(ctx, in, "resourceTypes", m.ResourceTypes, false)
@@ -110,6 +110,8 @@ func webhookSchema() schema.Schema {
 			"label": schema.StringAttribute{
 				MarkdownDescription: "Label identifying the webhook in the Linear UI.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       keepString(),
 			},
 			"enabled": schema.BoolAttribute{
 				MarkdownDescription: "Whether the webhook fires. Linear disables a webhook itself after repeated " +
@@ -128,7 +130,8 @@ func webhookSchema() schema.Schema {
 				MarkdownDescription: "UUID of the team the webhook is scoped to. Leave unset together with " +
 					"`all_public_teams` for a workspace-wide webhook. Changing it replaces the webhook.",
 				Optional:      true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				Computed:      true,
+				PlanModifiers: keepString(stringplanmodifier.RequiresReplace()),
 			},
 			"all_public_teams": schema.BoolAttribute{
 				MarkdownDescription: "Whether the webhook covers every public team rather than a single one. " +
@@ -141,8 +144,8 @@ func webhookSchema() schema.Schema {
 			"secret": schema.StringAttribute{
 				MarkdownDescription: "Signing secret Linear uses for the `Linear-Signature` header, so the " +
 					"receiver can verify a delivery came from Linear.\n\n" +
-					"Write-only by design: it is sent but never read back, so it cannot surface through a refresh " +
-					"or a provider log. It is still stored in state — keep the state encrypted.",
+					"**Write-only** by design: it is sent but never read back, so it cannot surface through a " +
+					"refresh or a provider log. It is still stored in state — keep the state encrypted.",
 				Optional:  true,
 				Sensitive: true,
 			},
