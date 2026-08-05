@@ -450,7 +450,7 @@ func teamSchema() schema.Schema {
 				Optional:      true,
 				Computed:      true,
 				CustomType:    jsontypes.NormalizedType{},
-				PlanModifiers: keepString(),
+				PlanModifiers: keepJSON(),
 			},
 
 			// Linear accepts these on the input but does not return them on the Team

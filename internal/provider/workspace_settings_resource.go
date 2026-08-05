@@ -421,7 +421,7 @@ func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaR
 			Optional:            true,
 			Computed:            true,
 			CustomType:          jsontypes.NormalizedType{},
-			PlanModifiers:       keepString(),
+			PlanModifiers:       keepJSON(),
 		}
 	}
 	writeOnlyBool := func(desc string) schema.Attribute {

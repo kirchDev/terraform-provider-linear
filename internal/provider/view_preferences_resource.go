@@ -107,8 +107,9 @@ func (r *viewPreferencesResource) Schema(_ context.Context, _ resource.SchemaReq
 				MarkdownDescription: "Display preferences as a JSON object, e.g. " +
 					"`jsonencode({ layout = \"board\", issueGrouping = \"assignee\" })`. Keys are Linear's own " +
 					"`ViewPreferencesValues` field names. Compared semantically.",
-				Required:   true,
-				CustomType: jsontypes.NormalizedType{},
+				Required:      true,
+				CustomType:    jsontypes.NormalizedType{},
+				PlanModifiers: keepJSON(),
 			},
 		},
 	}

@@ -158,8 +158,9 @@ func templateSchema() schema.Schema {
 				MarkdownDescription: "Template body as a JSON object — the pre-filled attributes of the target " +
 					"entity, e.g. `jsonencode({ title = \"Incident\", priority = 1 })` for an issue template. " +
 					"Compared semantically, so formatting differences are not drift.",
-				Required:   true,
-				CustomType: jsontypes.NormalizedType{},
+				Required:      true,
+				CustomType:    jsontypes.NormalizedType{},
+				PlanModifiers: keepJSON(),
 			},
 		},
 	}

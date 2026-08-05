@@ -6,6 +6,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -102,6 +103,60 @@ func TestComputedAttributesKeepTheirPriorValue(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Every JSON attribute is documented as compared semantically, and until the
+// plan says so too that claim holds only after the apply: the framework runs a
+// custom type's semantic equality in Create, Read and Update, and nowhere in
+// PlanResourceChange. So a document that differs from state in formatting alone
+// plans as a change, forever — see keepJSON in plan.go.
+//
+// The guard is over the whole provider for the same reason as the one above:
+// this is a property of jsontypes.Normalized rather than of any one attribute,
+// so every resource that reaches for the type inherits it. Data sources are out
+// of scope — they have no plan to modify.
+func TestJSONAttributesAreComparedSemanticallyInThePlan(t *testing.T) {
+	t.Parallel()
+
+	found := 0
+	for typeName, s := range resourceSchemas(t) {
+		names := make([]string, 0, len(s.Attributes))
+		for name := range s.Attributes {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		for _, name := range names {
+			attribute, ok := s.Attributes[name].(schema.StringAttribute)
+			if !ok || attribute.CustomType == nil {
+				continue
+			}
+			if _, isJSON := attribute.CustomType.(jsontypes.NormalizedType); !isJSON {
+				continue
+			}
+
+			found++
+			if !comparesJSONSemantically(anySlice(attribute.PlanModifiers)) {
+				t.Errorf("%s.%s is a jsontypes.Normalized attribute without the semantic-equality plan "+
+					"modifier: a value differing from state in whitespace or key order alone plans as a "+
+					"change on every plan, which the attribute's own description says it does not. "+
+					"Give it keepJSON() from plan.go.", typeName, name)
+			}
+		}
+	}
+
+	if found == 0 {
+		t.Fatal("no jsontypes.Normalized attributes found — the guard would pass vacuously")
+	}
+}
+
+func comparesJSONSemantically(modifiers []any) bool {
+	for _, m := range modifiers {
+		if _, ok := m.(semanticallyEqualJSON); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // resourceSchemas returns every registered resource's schema, keyed by type

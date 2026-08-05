@@ -275,6 +275,62 @@ resource "linear_workspace_settings" "test" {
 	})
 }
 
+// The JSON attributes are documented as "Compared semantically", and on the
+// apply they are: both sides of the update diff are built by the same code, so
+// a reformatted but equivalent document is correctly seen as unchanged. The
+// plan is the half that was missing. terraform-plugin-framework applies a
+// custom type's semantic equality in Create, Read and Update and nowhere in
+// PlanResourceChange, so the planned value stays exactly the bytes the
+// configuration wrote — and Terraform renders the difference against state as
+// `# whitespace changes`.
+//
+// Import is where it bites, because that is the one path where state holds
+// Linear's serialisation rather than the configuration's: an adopted workspace
+// plans a change forever, on an attribute whose content is identical.
+func TestAccWorkspaceSettings_reformattedSecuritySettingsAreNotAChange(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("organization", "Organization", organizationTypeFields)
+	seedWorkspace(mock)
+	mock.fill(t, "organization", "", map[string]any{"securitySettings": map[string]any{
+		"invitationsRole":  "user",
+		"teamCreationRole": "admin",
+	}})
+	srv := mock.server(t)
+
+	// The same object the API reports, written the way a practitioner writes it:
+	// indented, and in the order the settings are thought about rather than the
+	// order Go's encoder emits them in. Nothing here differs but the formatting.
+	const config = `
+resource "linear_workspace_settings" "test" {
+  security_settings_json = <<-EOT
+    {
+      "teamCreationRole": "admin",
+      "invitationsRole": "user"
+    }
+  EOT
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             providerConfig(srv.URL) + config,
+				ResourceName:       "linear_workspace_settings.test",
+				ImportState:        true,
+				ImportStateId:      "workspace",
+				ImportStatePersist: true,
+			},
+			{
+				Config: providerConfig(srv.URL) + config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+}
+
 // ip_restrictions_json has to survive the round trip a practitioner actually
 // writes: an entry with no description at all. Linear answers a selection with
 // every subfield it was asked for, so that entry comes back carrying
