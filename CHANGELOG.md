@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.2...v0.2.3) (2026-08-05)
+
+
+### Bug Fixes
+
+* send only the workspace settings that changed ([#33](https://github.com/kirchDev/terraform-provider-linear/issues/33)) ([5fdd16a](https://github.com/kirchDev/terraform-provider-linear/commit/5fdd16aec025123e059a7573a2c9fac67d72a1e7))
+
 ## [0.2.2](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.1...v0.2.2) (2026-08-05)
 
 
