@@ -72,7 +72,7 @@ tofu plan
 
 ## 🗺️ Coverage
 
-Scope is **workspace configuration**. Issues, projects, initiatives, documents and comments are content — they belong in Linear's UI and its API, not in a state file.
+Scope is **workspace configuration**. Issues, projects, initiatives, documents and comments are content — they belong in Linear's UI and its API, not in a state file. **Agent guidance** is left out for a different reason: Linear's API exposes no mutation and no query for it, so there is nothing to declare — only `agentGuidanceRole`, who may edit it, which `linear_workspace_settings` already covers.
 
 <details>
 <summary>Full coverage</summary>

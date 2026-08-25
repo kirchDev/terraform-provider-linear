@@ -446,7 +446,13 @@ func teamSchema() schema.Schema {
 				MarkdownDescription: "Team security settings as a JSON object — which role may manage what, e.g. " +
 					"`jsonencode({ labelManagement = \"admin\", templateManagement = \"member\" })`. Keys: " +
 					"`agentSkillsManagement`, `automationManagement`, `issueSharing`, `labelManagement`, " +
-					"`memberManagement`, `teamManagement`, `templateManagement`. Compared semantically.",
+					"`memberManagement`, `teamManagement`, `templateManagement`. Compared semantically. " +
+					"**Not writable on every plan.** Every key here takes a team role, and team owners are not " +
+					"available on Linear's smaller plans; where they are not, `teamUpdate` refuses the attribute " +
+					"outright with `invalid input: team owners not available`. The gate is the attribute rather " +
+					"than its content — a workspace without team owners reports the live value as `{}` and " +
+					"rejects `{}` being sent back. Leave it out of the configuration there: an attribute the " +
+					"configuration never sets is never sent.",
 				Optional:      true,
 				Computed:      true,
 				CustomType:    jsontypes.NormalizedType{},

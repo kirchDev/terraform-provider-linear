@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -430,6 +431,238 @@ resource "linear_team" "test" {
 					}
 					return nil
 				},
+			},
+		},
+	})
+}
+
+// Linear refuses a teamUpdate that carries the team's own unchanged
+// securitySettings — `invalid input: team owners not available` on any workspace
+// whose plan has no team owners, and the live value there is the empty object,
+// so it is the attribute that is gated and not its content. An update echoing
+// the whole team back therefore failed whatever the configuration changed, which
+// made every in-place change to a team impossible (#42).
+//
+// Every readable attribute being Optional + Computed is what fills the plan with
+// live values to echo, so the shared Update has to send only what actually
+// moved. The assertion is on the raw input rather than the stored team: store
+// merges the input onto what was already there, so a field that was seeded reads
+// the same whether the provider sent it or not, and "did not send" is the whole
+// claim.
+func TestAccTeam_updateSendsOnlyWhatChanged(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("team", "Team", teamTypeFields)
+	srv := mock.server(t)
+
+	const config = `
+resource "linear_team" "test" {
+  name = "Engineering"
+  key  = "ENG"
+}
+`
+	const described = `
+resource "linear_team" "test" {
+  name        = "Engineering"
+  key         = "ENG"
+  description = "Ships the product"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + config,
+				Check: func(*terraform.State) error {
+					mock.fill(t, "team", mock.only(t, "team")["id"].(string), linearTeamDefaults)
+					return nil
+				},
+			},
+			// The refresh pulls Linear's defaults into state, so from here every
+			// attribute the configuration never mentioned carries a live value into
+			// the plan — the material the update used to echo back.
+			{Config: providerConfig(srv.URL) + config},
+			{
+				Config: providerConfig(srv.URL) + described,
+				Check: func(*terraform.State) error {
+					inputs := mock.updateInputs("team")
+					if len(inputs) == 0 {
+						return fmt.Errorf("no teamUpdate was sent at all")
+					}
+					in := inputs[len(inputs)-1]
+					if _, sent := in["securitySettings"]; sent {
+						return fmt.Errorf("update echoed securitySettings, which Linear rejects: %#v", in)
+					}
+					if got := in["description"]; got != "Ships the product" {
+						return fmt.Errorf("update did not carry the changed description, got %#v", got)
+					}
+					// The point is not merely that securitySettings is gone: an update
+					// still echoing thirty other unchanged settings would pass the check
+					// above and remain the same bug one field further on.
+					if len(in) != 1 {
+						return fmt.Errorf("update sent %d fields, want only the changed one: %#v", len(in), in)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
+// The diff can come out empty, and an empty update is still a request Linear can
+// refuse. Dropping a write-only attribute from the configuration is the plainest
+// way there: it is plain Optional rather than Optional + Computed, so Terraform
+// plans `true -> null` and calls Update, while the provider has nothing to send —
+// putBool skips a null it is not allowed to clear, and every other attribute is
+// unchanged. What is left is a mutation carrying no fields at all, which is the
+// echo bug's failure mode with none of its intent.
+//
+// So nothing left means no mutation. The refresh is the other half: state has to
+// end up holding what is live even though nothing was written.
+func TestAccTeam_updateWithNothingToSendSkipsTheMutation(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("team", "Team", teamTypeFields)
+	srv := mock.server(t)
+
+	const shared = `
+resource "linear_team" "test" {
+  name                  = "Engineering"
+  key                   = "ENG"
+  issue_sharing_enabled = true
+}
+`
+	const dropped = `
+resource "linear_team" "test" {
+  name = "Engineering"
+  key  = "ENG"
+}
+`
+
+	var before int
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + shared,
+				Check: func(*terraform.State) error {
+					mock.fill(t, "team", mock.only(t, "team")["id"].(string), linearTeamDefaults)
+					return nil
+				},
+			},
+			{
+				Config: providerConfig(srv.URL) + shared,
+				Check: func(*terraform.State) error {
+					before = len(mock.updateInputs("team"))
+					return nil
+				},
+			},
+			{
+				Config: providerConfig(srv.URL) + dropped,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(*terraform.State) error {
+						if got := len(mock.updateInputs("team")); got != before {
+							return fmt.Errorf("sent %d mutation(s) with nothing to change: %#v",
+								got-before, mock.updateInputs("team")[before:])
+						}
+						return nil
+					},
+					// Skipping the mutation must not skip the refresh.
+					resource.TestCheckResourceAttr("linear_team.test", "all_members_can_join", "true"),
+					resource.TestCheckResourceAttr("linear_team.test", "security_settings_json", "{}"),
+					resource.TestCheckResourceAttr("linear_team.test", "timezone", "Europe/Berlin"),
+				),
+			},
+		},
+	})
+}
+
+// The follow-up update after a create is the same echo one step earlier. Team's
+// create input is narrower than its update input, so a configuration setting any
+// update-only attribute gets a second mutation — and that one was built from the
+// whole plan too, re-sending everything the create had just written. There is no
+// prior state to compare against there, but there is a create response, and that
+// is what the entity looks like at the moment the follow-up runs.
+//
+// So the follow-up sends the update-only attribute and nothing else: the create
+// already landed the rest.
+func TestAccTeam_createFollowUpUpdateSendsOnlyWhatChanged(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("team", "Team", teamTypeFields)
+	srv := mock.server(t)
+
+	// all_members_can_join is on TeamUpdateInput alone, so this is a create that
+	// cannot land in one mutation.
+	const config = `
+resource "linear_team" "test" {
+  name                 = "Engineering"
+  key                  = "ENG"
+  description          = "Ships the product"
+  all_members_can_join = false
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + config,
+				Check: func(*terraform.State) error {
+					inputs := mock.updateInputs("team")
+					if len(inputs) != 1 {
+						return fmt.Errorf("want exactly one follow-up teamUpdate, got %d: %#v", len(inputs), inputs)
+					}
+					in := inputs[0]
+					if got, ok := in["allMembersCanJoin"]; !ok || got != false {
+						return fmt.Errorf("follow-up update did not carry allMembersCanJoin, got %#v", in)
+					}
+					if len(in) != 1 {
+						return fmt.Errorf("follow-up update re-sent %d fields the create already wrote: %#v",
+							len(in)-1, in)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
+// needsUpdateAfterCreate answers off IsNull, and an Optional + Computed
+// attribute the configuration never mentions is unknown at create rather than
+// null — so every team create asks for a follow-up update, whether or not the
+// configuration set anything the create input could not carry. Diffed against
+// the create response that mutation has nothing left in it, and an empty
+// teamUpdate is a request Linear can still refuse for reasons that have nothing
+// to do with this apply.
+func TestAccTeam_createSendsNoFollowUpUpdateWithNothingToChange(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("team", "Team", teamTypeFields)
+	srv := mock.server(t)
+
+	const config = `
+resource "linear_team" "test" {
+  name        = "Engineering"
+  key         = "ENG"
+  description = "Ships the product"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(*terraform.State) error {
+						if inputs := mock.updateInputs("team"); len(inputs) != 0 {
+							return fmt.Errorf("create sent %d follow-up teamUpdate(s) with nothing to change: %#v",
+								len(inputs), inputs)
+						}
+						return nil
+					},
+					resource.TestCheckResourceAttr("linear_team.test", "description", "Ships the product"),
+					resource.TestCheckResourceAttr("linear_team.test", "key", "ENG"),
+				),
 			},
 		},
 	})
