@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -67,6 +68,61 @@ resource "linear_workspace_label" "test" {
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 				Check: resource.TestCheckResourceAttr("linear_workspace_label.test", "parent_id", ""),
+			},
+		},
+	})
+}
+
+// Sending only what changed is a property of the shared Update every standard
+// resource runs, not of linear_team — the resource it was reported against
+// happens to be the widest one, which is why its echo was the one Linear
+// refused. A label is the same construction with five attributes instead of
+// forty: Optional + Computed throughout, so an attribute the configuration never
+// mentions carries its live value into the plan and would be echoed straight
+// back.
+//
+// This is here rather than beside the team test so a fix that landed on the
+// resource instead of on the machinery shows up as a failure rather than as a
+// second report.
+func TestAccWorkspaceLabel_updateSendsOnlyWhatChanged(t *testing.T) {
+	mock := newLinearMock()
+	srv := mock.server(t)
+
+	const described = `
+resource "linear_workspace_label" "test" {
+  name        = "Bug"
+  color       = "#d73a4a"
+  description = "Something isn't working"
+}
+`
+	const recoloured = `
+resource "linear_workspace_label" "test" {
+  name        = "Bug"
+  color       = "#b60205"
+  description = "Something isn't working"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: providerConfig(srv.URL) + described},
+			{
+				Config: providerConfig(srv.URL) + recoloured,
+				Check: func(*terraform.State) error {
+					inputs := mock.updateInputs("issueLabel")
+					if len(inputs) != 1 {
+						return fmt.Errorf("want exactly one issueLabelUpdate, got %d: %#v", len(inputs), inputs)
+					}
+					in := inputs[0]
+					if got := in["color"]; got != "#b60205" {
+						return fmt.Errorf("update did not carry the changed colour, got %#v", got)
+					}
+					if len(in) != 1 {
+						return fmt.Errorf("update echoed %d unchanged field(s): %#v", len(in)-1, in)
+					}
+					return nil
+				},
 			},
 		},
 	})

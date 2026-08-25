@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -643,14 +642,11 @@ func (r *workspaceSettingsResource) apply(ctx context.Context, plan, prior *work
 			diags.AddError("Unable to build Linear workspace settings input", err.Error())
 			return
 		}
-		// Both sides are built by the same code, so a JSON attribute is compared
-		// as decoded values rather than as text — a reformatted but equivalent
-		// document is correctly seen as unchanged.
-		for key, was := range before {
-			if reflect.DeepEqual(in[key], was) {
-				delete(in, key)
-			}
-		}
+		// The same rule the standard resources run, and deliberately the same
+		// code: this resource is hand-written only because the singleton has no
+		// id-based CRUD, and two copies of "drop what did not move" would be two
+		// things to keep in step.
+		in = changedInput(in, before)
 	}
 
 	// Nothing moved: skip the mutation entirely and refresh from the API, so

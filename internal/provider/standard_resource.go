@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -111,13 +112,29 @@ func (r *standardResource) Create(ctx context.Context, req resource.CreateReques
 	// the follow-up update sends them.
 	if m, ok := plan.(createThenUpdate); ok && m.needsUpdateAfterCreate() {
 		id := plan.id()
+		// The create response stands in for prior state here: it is what the entity
+		// looks like at the moment the follow-up runs, so an attribute the create
+		// already landed is not a change. A model of its own rather than the
+		// decoded plan, because a write-only attribute — one Linear accepts and
+		// never returns — must come out of it with no comparison value and so keep
+		// being sent.
+		created := r.newModel()
+		if err := created.decode(ctx, raw); err != nil {
+			resp.Diagnostics.AddError("Unable to read Linear "+r.kind+" after create", err.Error())
+			return
+		}
 		resp.Diagnostics.Append(req.Plan.Get(ctx, plan)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		if err := r.entity.update(ctx, r.client, id, plan.input(ctx, true), &raw); err != nil {
-			resp.Diagnostics.AddError("Unable to apply Linear "+r.kind+" settings after create", err.Error())
-			return
+		// Nothing left means nothing to send: raw still holds the create response,
+		// which is what the entity looks like, so the decode below is the whole
+		// remaining job.
+		if in := changedInput(plan.input(ctx, true), created.input(ctx, true)); len(in) > 0 {
+			if err := r.entity.update(ctx, r.client, id, in, &raw); err != nil {
+				resp.Diagnostics.AddError("Unable to apply Linear "+r.kind+" settings after create", err.Error())
+				return
+			}
 		}
 		if err := plan.decode(ctx, raw); err != nil {
 			resp.Diagnostics.AddError("Unable to read Linear "+r.kind+" after create", err.Error())
@@ -170,12 +187,27 @@ func (r *standardResource) read(ctx context.Context, state crudModel) (json.RawM
 func (r *standardResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	plan := r.newModel()
 	resp.Diagnostics.Append(req.Plan.Get(ctx, plan)...)
+	prior := r.newModel()
+	resp.Diagnostics.Append(req.State.Get(ctx, prior)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	in := changedInput(plan.input(ctx, true), prior.input(ctx, true))
+
 	var raw json.RawMessage
-	if err := r.entity.update(ctx, r.client, plan.id(), plan.input(ctx, true), &raw); err != nil {
+	if len(in) == 0 {
+		// Nothing moved that the mutation could carry — a write-only attribute
+		// dropped from the configuration is the plainest way here, since it plans
+		// as a change the input has no way to express. Read instead of sending an
+		// empty mutation, so state still ends up holding what is live.
+		got, err := r.read(ctx, plan)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read Linear "+r.kind+" after update", err.Error())
+			return
+		}
+		raw = got
+	} else if err := r.entity.update(ctx, r.client, plan.id(), in, &raw); err != nil {
 		resp.Diagnostics.AddError("Unable to update Linear "+r.kind, err.Error())
 		return
 	}
@@ -205,4 +237,37 @@ func (r *standardResource) Delete(ctx context.Context, req resource.DeleteReques
 // the framework runs straight afterwards.
 func (r *standardResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// changedInput drops from a mutation input every field whose value has not
+// moved, comparing against the same input built from the value the change
+// starts out at — prior state on an update, the create response on the
+// follow-up update after a create.
+//
+// Almost every attribute this provider models is Optional + Computed, which is
+// what makes "an attribute the configuration leaves out keeps its live value"
+// true. The cost is that the plan is full of live values the configuration never
+// mentioned, and putting all of them back into the mutation echoes the whole
+// entity on every apply. Linear rejects at least one such echo outright —
+// `teamUpdate` answers `invalid input: team owners not available` when it
+// receives a team's own unchanged `securitySettings` on a workspace whose plan
+// has no team owners — which made every in-place update of a team fail
+// regardless of what the configuration had changed. Diffing keeps the promise
+// while sending nothing Linear can object to.
+//
+// A key `before` does not carry is always sent: that is an attribute with no
+// comparison value rather than an unchanged one, which is what the write-only
+// attributes are on the create path — Linear accepts them and never returns
+// them, so the response they would be compared against cannot hold them.
+//
+// Both sides are built by the same code, so a JSON attribute is compared as
+// decoded values rather than as text and a reformatted but equivalent document
+// is correctly seen as unchanged.
+func changedInput(in, before map[string]any) map[string]any {
+	for key, was := range before {
+		if reflect.DeepEqual(in[key], was) {
+			delete(in, key)
+		}
+	}
+	return in
 }
