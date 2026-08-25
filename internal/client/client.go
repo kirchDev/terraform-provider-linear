@@ -15,6 +15,11 @@
 //     X-RateLimit-Requests-Remaining. A 429 carries Retry-After; the client
 //     honours it (and retries transient 5xx with backoff) transparently, so
 //     resources never see either.
+//   - A rejected mutation input comes back as "Argument Validation Error", a
+//     message that names neither the field nor the rule. What names them is
+//     extensions.validationErrors, so APIError renders that alongside the
+//     message — without it the operator learns only that something was invalid,
+//     and only at apply time, since Terraform's own plan accepts any string.
 package client
 
 import (
@@ -26,6 +31,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -141,6 +147,64 @@ func (e *GraphQLError) Type() string {
 	return s
 }
 
+// ValidationError is one entry of extensions.validationErrors: the input
+// property Linear rejected, and the constraints it broke keyed by rule name.
+type ValidationError struct {
+	Property    string
+	Constraints map[string]string
+}
+
+// String renders the entry as "property: message (rule)". Constraints are
+// ordered by rule name so one rejection always reads the same way.
+func (v ValidationError) String() string {
+	if len(v.Constraints) == 0 {
+		return v.Property
+	}
+	rules := make([]string, 0, len(v.Constraints))
+	for rule := range v.Constraints {
+		rules = append(rules, rule)
+	}
+	sort.Strings(rules)
+	msgs := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		msgs = append(msgs, fmt.Sprintf("%s (%s)", v.Constraints[rule], rule))
+	}
+	return v.Property + ": " + strings.Join(msgs, "; ")
+}
+
+// ValidationErrors reads extensions.validationErrors, which Linear populates
+// when it rejects a mutation input. Anything absent or of an unexpected shape is
+// skipped rather than guessed at, so an error carrying no usable entry renders
+// exactly as it did before this was read at all.
+func (e *GraphQLError) ValidationErrors() []ValidationError {
+	raw, ok := e.Extension["validationErrors"].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]ValidationError, 0, len(raw))
+	for _, entry := range raw {
+		fields, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		property, _ := fields["property"].(string)
+		if property == "" {
+			continue
+		}
+		ve := ValidationError{Property: property}
+		if constraints, ok := fields["constraints"].(map[string]any); ok {
+			ve.Constraints = make(map[string]string, len(constraints))
+			for rule, msg := range constraints {
+				if s, ok := msg.(string); ok {
+					ve.Constraints[rule] = s
+				}
+			}
+		}
+		out = append(out, ve)
+	}
+	return out
+}
+
 // APIError is a failed GraphQL call: either a non-2xx transport response or —
 // far more commonly — an HTTP 200 carrying a populated errors[].
 type APIError struct {
@@ -156,11 +220,16 @@ func (e *APIError) Error() string {
 	}
 	parts := make([]string, 0, len(e.Errors))
 	for _, ge := range e.Errors {
+		part := ge.Message
 		if t := ge.Type(); t != "" {
-			parts = append(parts, fmt.Sprintf("%s: %s", t, ge.Message))
-			continue
+			part = fmt.Sprintf("%s: %s", t, ge.Message)
 		}
-		parts = append(parts, ge.Message)
+		// Indented on their own lines: the message above says only that
+		// something was invalid, these say what and why.
+		for _, ve := range ge.ValidationErrors() {
+			part += "\n  " + ve.String()
+		}
+		parts = append(parts, part)
 	}
 	return fmt.Sprintf("linear API %s: %s", e.Operation, strings.Join(parts, "; "))
 }

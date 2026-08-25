@@ -111,8 +111,70 @@ func TestErrorsInsideHTTP200(t *testing.T) {
 	if !strings.Contains(apiErr.Error(), "teamCreate") {
 		t.Errorf("error should name the operation: %s", apiErr.Error())
 	}
+	// No validationErrors extension: the rendering stays exactly one line.
+	if strings.Contains(apiErr.Error(), "\n") {
+		t.Errorf("error without validationErrors should stay single-line: %q", apiErr.Error())
+	}
 	if NotFound(err) {
 		t.Error("NotFound must not match an InvalidInput error")
+	}
+}
+
+// Linear names the offending input in extensions.validationErrors. Dropping it
+// leaves the operator with "Argument Validation Error" and no field — a failure
+// the plan cannot catch, since only the API objects and only at apply time.
+func TestValidationErrorsNameTheOffendingField(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"errors":[{"message":"Argument Validation Error",
+			"path":["customViewCreate"],
+			"extensions":{"type":"invalid input","code":"INVALID_INPUT",
+				"validationErrors":[{"property":"description","constraints":{
+					"maxLength":"description must be shorter than or equal to 255 characters"}}]}}],
+			"data":null}`)
+	}))
+	defer srv.Close()
+
+	err := newTestClient(srv).Mutate(context.Background(),
+		`mutation customViewCreate($input: CustomViewCreateInput!) { customViewCreate(input: $input) { success } }`,
+		map[string]any{"input": map[string]any{"name": "Too long"}}, nil)
+	if err == nil {
+		t.Fatal("expected an error for a rejected mutation input")
+	}
+
+	want := "linear API customViewCreate: invalid input: Argument Validation Error\n" +
+		"  description: description must be shorter than or equal to 255 characters (maxLength)"
+	if got := err.Error(); got != want {
+		t.Errorf("Error() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// Several properties, several rules each. Constraints live in a map, so without
+// an explicit order the same rejection would render differently run to run.
+func TestValidationErrorsRenderEveryPropertyInAStableOrder(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"errors":[{"message":"Argument Validation Error",
+			"extensions":{"type":"invalid input","validationErrors":[
+				{"property":"name","constraints":{
+					"maxLength":"name must be shorter than or equal to 50 characters",
+					"isNotEmpty":"name should not be empty"}},
+				{"property":"color","constraints":{"matches":"color must be a hex colour"}}]}}],
+			"data":null}`)
+	}))
+	defer srv.Close()
+
+	err := newTestClient(srv).Mutate(context.Background(),
+		`mutation labelCreate { labelCreate(input: $input) { success } }`, nil, nil)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+
+	want := "linear API labelCreate: invalid input: Argument Validation Error\n" +
+		"  name: name should not be empty (isNotEmpty); name must be shorter than or equal to 50 characters (maxLength)\n" +
+		"  color: color must be a hex colour (matches)"
+	for range 5 {
+		if got := err.Error(); got != want {
+			t.Fatalf("Error() =\n%s\nwant:\n%s", got, want)
+		}
 	}
 }
 
