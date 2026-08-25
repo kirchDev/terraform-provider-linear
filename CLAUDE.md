@@ -25,7 +25,7 @@ A first-party **OpenTofu / Terraform provider for [Linear](https://linear.app)**
 
 The repo name format `NAMESPACE/terraform-provider-NAME` is **mandatory** for the OpenTofu/Terraform registry — it's not a style choice.
 
-**Scope is workspace configuration, not issue content** — there is no `linear_issue`, `linear_project` or `linear_document` resource. Content, `cycle` (Linear generates those itself), the 54 OAuth `integration*` mutations, `favorite`, and anything that is an event rather than state were all considered and deliberately left out. Don't add one without a conversation.
+**Scope is workspace configuration, not issue content** — there is no `linear_issue`, `linear_project` or `linear_document` resource. Content, `cycle` (Linear generates those itself), the 54 OAuth `integration*` mutations, `favorite`, and anything that is an event rather than state were all considered and deliberately left out. **Agent guidance** (Settings → Agents → Additional guidance) joins that list for a different reason — **no API surface**: the type is `AiPromptRules`, it carries no content field (the text itself lives in `DocumentContent`), and the schema holds no `rule*` mutation and no root query for it. What is reachable is `agentGuidanceRole` in `security_settings_json`, which sets who may edit the guidance — never the guidance. Don't add one without a conversation.
 
 ## Current state
 
