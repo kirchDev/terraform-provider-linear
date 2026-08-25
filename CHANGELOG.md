@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.4](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.3...v0.2.4) (2026-08-25)
+
+
+### Bug Fixes
+
+* compare a JSON attribute semantically in the plan ([1598fe0](https://github.com/kirchDev/terraform-provider-linear/commit/1598fe02cd8a324a3f20e494be64ed71fef9b9e7)), closes [#31](https://github.com/kirchDev/terraform-provider-linear/issues/31)
+* keep a read-only attribute's value in the plan ([1a0687a](https://github.com/kirchDev/terraform-provider-linear/commit/1a0687a56ee05c4fb1a89e11dfef6df302a325c1)), closes [#31](https://github.com/kirchDev/terraform-provider-linear/issues/31)
+* send only the entity fields that changed ([e9f01bf](https://github.com/kirchDev/terraform-provider-linear/commit/e9f01bfb2ff56880f4fc31000eaccf30cbffd4d2)), closes [#42](https://github.com/kirchDev/terraform-provider-linear/issues/42)
+
 ## [0.2.3](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.2...v0.2.3) (2026-08-05)
 
 
