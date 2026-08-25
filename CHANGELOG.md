@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.4...v0.2.5) (2026-08-25)
+
+
+### Bug Fixes
+
+* name the rejected field in a mutation error ([75837f1](https://github.com/kirchDev/terraform-provider-linear/commit/75837f1e970b8175a2c8da5f293a43a3be73fbe4)), closes [#45](https://github.com/kirchDev/terraform-provider-linear/issues/45)
+
 ## [0.2.4](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.3...v0.2.4) (2026-08-25)
 
 
