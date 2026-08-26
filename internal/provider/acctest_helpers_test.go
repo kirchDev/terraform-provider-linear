@@ -99,6 +99,30 @@ type linearMock struct {
 	// looks identical whether the provider sent it or not. Asserting that an
 	// attribute is NOT sent needs the raw input, which is what this keeps.
 	updates map[string][]map[string]any
+
+	// lagging holds the entity names whose update mutation answers with the
+	// entity as it stood *before* the write. See lagUpdate.
+	lagging map[string]bool
+}
+
+// lagUpdate makes an entity's update mutation land the write and then answer
+// with the entity as it stood before it, leaving the read to report what is
+// live. That is not a hypothetical: `organizationUpdate` answered
+// `customersEnabled: true` to the very mutation that set it to false, while
+// `query organization` beside it already reported false.
+//
+// It is the one thing a mock built as an echo cannot otherwise express. Every
+// other test here relies on a mutation response being the truth, so a provider
+// that decodes it straight into state round-trips green however far the real
+// API's response lags — and the practitioner reads "Provider produced
+// inconsistent result after apply" on a change that in fact landed.
+func (m *linearMock) lagUpdate(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.lagging == nil {
+		m.lagging = map[string]bool{}
+	}
+	m.lagging[name] = true
 }
 
 // exposedType is one Linear type's readable surface.
@@ -558,8 +582,13 @@ func (m *linearMock) update(w http.ResponseWriter, name string, req mockRequest)
 	m.updates[name] = append(m.updates[name], input)
 
 	stored := m.store(name, id, input, existing)
+	// The write has landed either way; lagging only holds back the answer.
+	answer := stored
+	if m.lagging[name] {
+		answer = existing
+	}
 	m.writeData(w, map[string]any{
-		name + "Update": map[string]any{"success": true, name: stored},
+		name + "Update": map[string]any{"success": true, name: answer},
 	})
 }
 

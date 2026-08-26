@@ -668,19 +668,26 @@ func (r *workspaceSettingsResource) apply(ctx context.Context, plan, prior *work
 	doc := "mutation organizationUpdate($input: OrganizationUpdateInput!) {\n" +
 		"  organizationUpdate(input: $input) {\n    organization { " + organizationFields + " }\n  }\n}"
 
-	var data map[string]json.RawMessage
-	if err := r.client.Mutate(ctx, doc, map[string]any{"input": in}, &data); err != nil {
+	// The answer is discarded — see the read below. The document still selects
+	// the organization even so, which is what keeps the mutation's selection set
+	// under the same validation the read's is.
+	if err := r.client.Mutate(ctx, doc, map[string]any{"input": in}, nil); err != nil {
 		diags.AddError("Unable to update Linear workspace settings", err.Error())
 		return
 	}
-	var payload map[string]json.RawMessage
-	if err := decodeField(data, "organizationUpdate", &payload); err != nil {
-		diags.AddError("Unable to update Linear workspace settings", err.Error())
-		return
-	}
-	var raw json.RawMessage
-	if err := decodeField(payload, "organization", &raw); err != nil {
-		diags.AddError("Unable to update Linear workspace settings", err.Error())
+
+	// State comes from a read, never from what organizationUpdate reported back.
+	// Its answer is not always caught up with the write it is answering: it has
+	// replied `customersEnabled: true` to the very mutation that set it to
+	// false, with `query organization` beside it already reporting false and
+	// `customerCount` at 0. Decoding that reply into state hands Terraform a
+	// value that is not the one it planned, and the apply dies with "provider
+	// produced inconsistent result after apply" — on a change that in fact
+	// landed, so the write is done and only the state write is lost. The same
+	// read the branch above already runs, now on both paths rather than one.
+	raw, err := r.readOrganization(ctx)
+	if err != nil {
+		diags.AddError("Unable to read Linear workspace settings after update", err.Error())
 		return
 	}
 	if err := plan.decode(ctx, raw); err != nil {

@@ -131,10 +131,20 @@ func (r *standardResource) Create(ctx context.Context, req resource.CreateReques
 		// which is what the entity looks like, so the decode below is the whole
 		// remaining job.
 		if in := changedInput(plan.input(ctx, true), created.input(ctx, true)); len(in) > 0 {
-			if err := r.entity.update(ctx, r.client, id, in, &raw); err != nil {
+			if err := r.entity.update(ctx, r.client, id, in, nil); err != nil {
 				resp.Diagnostics.AddError("Unable to apply Linear "+r.kind+" settings after create", err.Error())
 				return
 			}
+			// The same read-back Update runs, for the same reason: this is an
+			// xUpdate like any other and its answer lags the write just as
+			// readily. It goes through `created` rather than `plan`, because the
+			// plan this far into a create still carries the id as unknown.
+			got, err := r.read(ctx, created)
+			if err != nil {
+				resp.Diagnostics.AddError("Unable to read Linear "+r.kind+" after create", err.Error())
+				return
+			}
+			raw = got
 		}
 		if err := plan.decode(ctx, raw); err != nil {
 			resp.Diagnostics.AddError("Unable to read Linear "+r.kind+" after create", err.Error())
@@ -195,20 +205,31 @@ func (r *standardResource) Update(ctx context.Context, req resource.UpdateReques
 
 	in := changedInput(plan.input(ctx, true), prior.input(ctx, true))
 
-	var raw json.RawMessage
-	if len(in) == 0 {
-		// Nothing moved that the mutation could carry — a write-only attribute
-		// dropped from the configuration is the plainest way here, since it plans
-		// as a change the input has no way to express. Read instead of sending an
-		// empty mutation, so state still ends up holding what is live.
-		got, err := r.read(ctx, plan)
-		if err != nil {
-			resp.Diagnostics.AddError("Unable to read Linear "+r.kind+" after update", err.Error())
+	// Nothing moved that the mutation could carry — a write-only attribute
+	// dropped from the configuration is the plainest way here, since it plans as
+	// a change the input has no way to express. There is then nothing to send,
+	// and the read below is the whole of the update.
+	if len(in) > 0 {
+		// The mutation answers with the entity and that answer is deliberately
+		// discarded: see the read below.
+		if err := r.entity.update(ctx, r.client, plan.id(), in, nil); err != nil {
+			resp.Diagnostics.AddError("Unable to update Linear "+r.kind, err.Error())
 			return
 		}
-		raw = got
-	} else if err := r.entity.update(ctx, r.client, plan.id(), in, &raw); err != nil {
-		resp.Diagnostics.AddError("Unable to update Linear "+r.kind, err.Error())
+	}
+
+	// State comes from a read, never from what the mutation reported back. An
+	// xUpdate payload is not always caught up with the write it is answering:
+	// `organizationUpdate` has replied `customersEnabled: true` to the very
+	// mutation that set it to false, with `query organization` beside it already
+	// reporting false. Decoding that reply into state hands Terraform a value
+	// that is not the one it planned, and the apply dies with "provider produced
+	// inconsistent result after apply" — on a change that in fact landed, so the
+	// write is done and the state write is the only thing lost. One extra query
+	// per update is what it costs to have state hold what is live either way.
+	raw, err := r.read(ctx, plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read Linear "+r.kind+" after update", err.Error())
 		return
 	}
 	if err := plan.decode(ctx, raw); err != nil {
