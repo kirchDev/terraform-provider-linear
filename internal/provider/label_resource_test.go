@@ -127,3 +127,65 @@ resource "linear_workspace_label" "test" {
 		},
 	})
 }
+
+// Reading back after the mutation is a property of the shared Update too, and
+// this is the half `updateSendsOnlyWhatChanged` above cannot see: that one
+// asserts on what went out, this one on what came back.
+//
+// Linear answers an xUpdate with the entity, and the provider used to decode
+// that answer straight into state. Where the answer has not caught up with the
+// write it carries the *old* value — the mutation succeeded, the API reports
+// the new value a moment later, and Terraform still refuses the apply with
+// "Provider produced inconsistent result after apply" because the value handed
+// back is not the value it planned. The change lands and the run fails, which
+// is the worst of both.
+//
+// A label rather than the workspace, deliberately: the report came from
+// linear_workspace_settings, whose Update is hand-written, and the same decode
+// sits in standardResource where every other resource runs it.
+func TestAccWorkspaceLabel_updateReadsBackWhenTheMutationResponseLags(t *testing.T) {
+	mock := newLinearMock()
+	srv := mock.server(t)
+
+	const described = `
+resource "linear_workspace_label" "test" {
+  name  = "Bug"
+  color = "#d73a4a"
+}
+`
+	const recoloured = `
+resource "linear_workspace_label" "test" {
+  name  = "Bug"
+  color = "#b60205"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: providerConfig(srv.URL) + described},
+			{
+				// Only the update under test lags; the create above is left alone,
+				// so what this asserts on is the update path and nothing else.
+				PreConfig: func() { mock.lagUpdate("issueLabel") },
+				Config:    providerConfig(srv.URL) + recoloured,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("linear_workspace_label.test", "color", "#b60205"),
+					func(*terraform.State) error {
+						// The mutation is still the thing that carries the change:
+						// a "fix" that stopped sending it and only read would pass
+						// the assertion above on a workspace nothing had changed.
+						inputs := mock.updateInputs("issueLabel")
+						if len(inputs) != 1 {
+							return fmt.Errorf("want exactly one issueLabelUpdate, got %d: %#v", len(inputs), inputs)
+						}
+						if got := inputs[0]["color"]; got != "#b60205" {
+							return fmt.Errorf("update did not carry the changed colour, got %#v", got)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}

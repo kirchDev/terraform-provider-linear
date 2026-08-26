@@ -521,3 +521,65 @@ func sameJSON(t *testing.T, got, want string) bool {
 	}
 	return reflect.DeepEqual(a, b)
 }
+
+// The resource the read-back was reported against, and the one attribute it was
+// reported on. `organizationUpdate` answered `customersEnabled: true` to the
+// mutation that set it to false — checked straight afterwards, `query
+// organization` already reported false and `customerCount` was 0, so the write
+// had landed and only the response was behind. Terraform saw a value that was
+// not the one it planned and failed the apply.
+//
+// The singleton's Update is hand-written rather than standardResource's, so the
+// same property is asserted here as well as on the shared machinery: a fix that
+// landed on only one of the two leaves the other exactly as reported.
+func TestAccWorkspaceSettings_updateReadsBackWhenTheMutationResponseLags(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("organization", "Organization", organizationTypeFields)
+	seedWorkspace(mock)
+	mock.fill(t, "organization", "", map[string]any{"customersEnabled": true})
+	srv := mock.server(t)
+
+	const enabled = `
+resource "linear_workspace_settings" "test" {
+  name              = "kirchDev"
+  customers_enabled = true
+}
+`
+	const disabled = `
+resource "linear_workspace_settings" "test" {
+  name              = "kirchDev"
+  customers_enabled = false
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + enabled,
+				Check: resource.TestCheckResourceAttr(
+					"linear_workspace_settings.test", "customers_enabled", "true"),
+			},
+			{
+				// The adoption above is left honest; only the update lags.
+				PreConfig: func() { mock.lagUpdate("organization") },
+				Config:    providerConfig(srv.URL) + disabled,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						"linear_workspace_settings.test", "customers_enabled", "false"),
+					func(*terraform.State) error {
+						inputs := mock.updateInputs("organization")
+						if len(inputs) == 0 {
+							return fmt.Errorf("no organizationUpdate was sent at all")
+						}
+						in := inputs[len(inputs)-1]
+						if got, sent := in["customersEnabled"]; !sent || got != false {
+							return fmt.Errorf("update did not carry customersEnabled = false: %#v", in)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}

@@ -72,7 +72,11 @@ func (e entity) create(ctx context.Context, c *client.Client, in map[string]any,
 	return e.mutateInto(ctx, c, doc, vars, op, out)
 }
 
-// update runs xUpdate and decodes the updated entity into out.
+// update runs xUpdate and decodes the updated entity into out. Callers pass nil
+// and read the entity back instead, because an xUpdate payload does not always
+// reflect the write it is answering. The document still selects the full field
+// set even so: that is what keeps the mutation's selection set under the same
+// validation the read's is, and Linear returns the payload either way.
 func (e entity) update(ctx context.Context, c *client.Client, id string, in map[string]any, out any) error {
 	op := e.name + "Update"
 	doc := fmt.Sprintf("mutation %s($id: String!, $input: %sUpdateInput!) {\n  %s(id: $id, input: $input) {\n    %s { %s }\n  }\n}",

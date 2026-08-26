@@ -667,3 +667,52 @@ resource "linear_team" "test" {
 		},
 	})
 }
+
+// The follow-up update after a create is an xUpdate like any other, so its
+// answer lags the write just as readily — and it is the one this provider has
+// no choice but to send, since TeamCreateInput cannot carry all of
+// TeamUpdateInput. Trusting that answer left the first apply of a team failing
+// on exactly the attributes the follow-up exists to land.
+//
+// Only the update lags here. The create is left honest, which is the point: the
+// entity the read goes back for is the one the create returned, and nothing on
+// the create path itself is what this asserts on.
+func TestAccTeam_createFollowUpUpdateReadsBackWhenTheResponseLags(t *testing.T) {
+	mock := newLinearMock()
+	mock.expose("team", "Team", teamTypeFields)
+	mock.lagUpdate("team")
+	srv := mock.server(t)
+
+	// all_members_can_join is on TeamUpdateInput alone, so this is a create that
+	// cannot land in one mutation.
+	const config = `
+resource "linear_team" "test" {
+  name                 = "Engineering"
+  key                  = "ENG"
+  description          = "Ships the product"
+  all_members_can_join = true
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("linear_team.test", "all_members_can_join", "true"),
+					func(*terraform.State) error {
+						inputs := mock.updateInputs("team")
+						if len(inputs) != 1 {
+							return fmt.Errorf("want exactly one follow-up teamUpdate, got %d: %#v", len(inputs), inputs)
+						}
+						if got, ok := inputs[0]["allMembersCanJoin"]; !ok || got != true {
+							return fmt.Errorf("follow-up update did not carry allMembersCanJoin: %#v", inputs[0])
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
