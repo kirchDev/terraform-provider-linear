@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.5...v0.2.6) (2026-08-26)
+
+
+### Bug Fixes
+
+* read the entity back after an update mutation ([e85cdba](https://github.com/kirchDev/terraform-provider-linear/commit/e85cdba3869565e1c03dd5f2e02ad09eb268757b)), closes [#48](https://github.com/kirchDev/terraform-provider-linear/issues/48)
+
 ## [0.2.5](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.4...v0.2.5) (2026-08-25)
 
 
