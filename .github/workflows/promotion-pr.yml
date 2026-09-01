@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Promotion PR
+
+on:
+  push:
+    branches:
+      - dev
+      - stage
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  promotion-pr:
+    name: Promotion PR
+    uses: kirchDev/workflows/.github/workflows/_promotion-pr.yml@c2c3c73a1b38c10e5d4a6dfa76c46749c03c1158 # v0.1.2
