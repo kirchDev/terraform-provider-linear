@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.0](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.6...v0.3.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* move to pnpm 12
+* this repository now requires pnpm 12.
+
+### Features
+
+* **ci:** call the central workflow bodies instead of copying them ([4aaf58a](https://github.com/kirchDev/terraform-provider-linear/commit/4aaf58adf6bb2e1f79b03a4a69140f651313694e))
+
+
+### Bug Fixes
+
+* **ci:** bump the bodies to v0.1.2 ([0fca67b](https://github.com/kirchDev/terraform-provider-linear/commit/0fca67b499897d21efa98e15b854501a70887007))
+* **ci:** bump the workflow bodies to v0.1.3 ([4c6bcfa](https://github.com/kirchDev/terraform-provider-linear/commit/4c6bcfa0e22c1d46a786e591b7a4517fba1a085e))
+* **ci:** pin the workflow bodies to v0.2.0 and drop paths-ignore ([6752c55](https://github.com/kirchDev/terraform-provider-linear/commit/6752c5533cd047d994e090f0487e9522b059dff3))
+* **ci:** pin the workflow bodies to v0.5.0 ([1fa7fe7](https://github.com/kirchDev/terraform-provider-linear/commit/1fa7fe7c9d404a4e6249e7f44d6ce1d7ed682355))
+* **ci:** pin the workflow bodies to v0.7.0 ([23808cc](https://github.com/kirchDev/terraform-provider-linear/commit/23808ccb0c369fce448b7ad613ba9ab9dcf06387))
+
+
+### Reverts
+
+* go back to pnpm 11.25.0 ([156f8e1](https://github.com/kirchDev/terraform-provider-linear/commit/156f8e1c59d9dae724ee84504f750a9daab8c3c7))
+
+
+### Miscellaneous Chores
+
+* move to pnpm 12 ([19994b9](https://github.com/kirchDev/terraform-provider-linear/commit/19994b9794fddb42056dd361146790a98f7cd45a))
+* move to pnpm 12 ([67dc860](https://github.com/kirchDev/terraform-provider-linear/commit/67dc860f372e16e95a000e0380ca06896d90a599))
+
 ## [0.2.6](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.5...v0.2.6) (2026-08-26)
 
 
