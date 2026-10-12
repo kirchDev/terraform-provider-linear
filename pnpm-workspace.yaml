@@ -11,12 +11,6 @@ minimumReleaseAge: 4320
 # (restored after the .npmrc -> pnpm-workspace.yaml migration dropped it).
 trustPolicy: no-downgrade
 
-# Allow tinyexec@1.2.2: a provenance/trust downgrade only (no known
-# vulnerability — Snyk-clean), pulled in transitively by commitlint,
-# lint-staged and taze. Re-check when bumping these tools past it.
-trustPolicyExclude:
-  - tinyexec@1.2.2
-
 # Prefer using the lockfile as-is for deterministic installs.
 preferFrozenLockfile: true
 
