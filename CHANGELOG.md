@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/kirchDev/terraform-provider-linear/compare/v0.3.0...v0.3.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **deps:** move to go 1.27 ([12bcc5a](https://github.com/kirchDev/terraform-provider-linear/commit/12bcc5afd183230acaa3479bc9fa4e3562c82b30))
+
 ## [0.3.0](https://github.com/kirchDev/terraform-provider-linear/compare/v0.2.6...v0.3.0) (2026-10-12)
 
 
