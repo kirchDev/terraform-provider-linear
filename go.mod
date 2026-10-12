@@ -1,14 +1,13 @@
 module github.com/kirchDev/terraform-provider-linear
 
-go 1.26.0
+go 1.27.0
 
-toolchain go1.26.9
-
-// Run `go mod tidy` after editing direct dependencies to refresh the indirect
-// block below and go.sum.
-require github.com/hashicorp/terraform-plugin-framework v1.19.0
+toolchain go1.27.2
 
 require (
+	// Run `go mod tidy` after editing direct dependencies to refresh the indirect
+	// block below and go.sum.
+	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-jsontypes v0.2.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
