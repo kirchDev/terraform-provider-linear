@@ -38,6 +38,7 @@ Read-Only:
 
 - `color` (String) Colour of the label as a hex string.
 - `description` (String) Description of the label.
+- `group_type` (String) Selection mode of a label group, `singleSelect` or `multiSelect`. Null for a regular label, and for a group created before Linear had the setting.
 - `id` (String) UUID of the label.
 - `is_group` (Boolean) Whether the label is a group other labels nest under.
 - `name` (String) Name of the label.

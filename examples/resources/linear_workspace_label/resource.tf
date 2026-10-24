@@ -4,11 +4,13 @@ resource "linear_workspace_label" "ai" {
   description = "Touched by an AI agent"
 }
 
-# Labels nest: a group holds the labels underneath it.
+# Labels nest: a group holds the labels underneath it. A multiSelect group lets
+# an issue carry several of them; the default admits one.
 resource "linear_workspace_label" "area" {
-  name     = "area"
-  color    = "#bec2c8"
-  is_group = true
+  name       = "area"
+  color      = "#bec2c8"
+  is_group   = true
+  group_type = "multiSelect"
 }
 
 resource "linear_workspace_label" "area_infra" {
