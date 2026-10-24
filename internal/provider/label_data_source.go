@@ -12,7 +12,7 @@ import (
 	"github.com/kirchDev/terraform-provider-linear/internal/client"
 )
 
-const issueLabelDataSourceFields = `id name color description isGroup parent { id } team { id }`
+const issueLabelDataSourceFields = `id name color description isGroup groupType parent { id } team { id }`
 
 // One data source covers both label scopes: unlike the resources, a lookup does
 // not have to distinguish them — the read tells you which scope you got by
@@ -51,6 +51,7 @@ type labelDataSourceModel struct {
 	Color       types.String `tfsdk:"color"`
 	Description types.String `tfsdk:"description"`
 	IsGroup     types.Bool   `tfsdk:"is_group"`
+	GroupType   types.String `tfsdk:"group_type"`
 	ParentID    types.String `tfsdk:"parent_id"`
 }
 
@@ -60,6 +61,7 @@ func (m *labelDataSourceModel) fill(a *issueLabelAttributes) {
 	m.Color = stringOrNull(a.Color)
 	m.Description = types.StringPointerValue(a.Description)
 	m.IsGroup = types.BoolValue(a.IsGroup)
+	m.GroupType = types.StringPointerValue(a.GroupType)
 	m.ParentID = refID(a.Parent)
 	m.TeamID = refID(a.Team)
 }
@@ -157,6 +159,11 @@ func labelDataSourceAttributeSchema(computedOnly bool) map[string]schema.Attribu
 		"is_group": schema.BoolAttribute{
 			MarkdownDescription: "Whether the label is a group other labels nest under.",
 			Computed:            true,
+		},
+		"group_type": schema.StringAttribute{
+			MarkdownDescription: "Selection mode of a label group, `singleSelect` or `multiSelect`. Null for a " +
+				"regular label, and for a group created before Linear had the setting.",
+			Computed: true,
 		},
 		"parent_id": schema.StringAttribute{
 			MarkdownDescription: "UUID of the parent label group.",

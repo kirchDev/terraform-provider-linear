@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -22,7 +24,7 @@ import (
 
 var issueLabelEntity = entity{
 	name:   "issueLabel",
-	fields: `id name color description isGroup parent { id } team { id }`,
+	fields: `id name color description isGroup groupType parent { id } team { id }`,
 }
 
 // NewWorkspaceLabelResource returns a new linear_workspace_label resource — a
@@ -56,6 +58,7 @@ type issueLabelAttributes struct {
 	Color       string  `json:"color"`
 	Description *string `json:"description"`
 	IsGroup     bool    `json:"isGroup"`
+	GroupType   *string `json:"groupType"`
 	Parent      *ref    `json:"parent"`
 	Team        *ref    `json:"team"`
 }
@@ -69,6 +72,7 @@ type issueLabelModel struct {
 	Color       types.String `tfsdk:"color"`
 	Description types.String `tfsdk:"description"`
 	IsGroup     types.Bool   `tfsdk:"is_group"`
+	GroupType   types.String `tfsdk:"group_type"`
 	ParentID    types.String `tfsdk:"parent_id"`
 }
 
@@ -84,6 +88,7 @@ func (m *issueLabelModel) decode(_ context.Context, raw json.RawMessage) error {
 	m.Color = stringOrNull(a.Color)
 	m.Description = types.StringPointerValue(a.Description)
 	m.IsGroup = types.BoolValue(a.IsGroup)
+	m.GroupType = types.StringPointerValue(a.GroupType)
 	m.ParentID = keepCleared(m.ParentID, refID(a.Parent))
 	m.TeamID = refID(a.Team)
 	return nil
@@ -95,6 +100,7 @@ func (m *issueLabelModel) input(_ context.Context, forUpdate bool) map[string]an
 	// configuration omits keeps its live value instead of being nulled.
 	putString(in, "color", m.Color, false)
 	putString(in, "description", m.Description, false)
+	putString(in, "groupType", m.GroupType, false)
 	putRef(in, "parentId", m.ParentID)
 	// isGroup and teamId only exist on the create input.
 	if !forUpdate {
@@ -139,6 +145,15 @@ func issueLabelSchema(teamScoped bool) schema.Schema {
 			Computed:      true,
 			Default:       booldefault.StaticBool(false),
 			PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+		},
+		"group_type": schema.StringAttribute{
+			MarkdownDescription: "Selection mode of a label group: `singleSelect` admits one of its labels per " +
+				"issue, `multiSelect` any number of them. Only meaningful with `is_group = true`; null for a " +
+				"regular label. Linear treats a group without a type as `singleSelect`. Changes in place.",
+			Optional:      true,
+			Computed:      true,
+			PlanModifiers: keepString(),
+			Validators:    []validator.String{stringvalidator.OneOf("singleSelect", "multiSelect")},
 		},
 		"parent_id": schema.StringAttribute{
 			MarkdownDescription: "UUID of the parent label group this label nests under." + clearWithEmptyString,

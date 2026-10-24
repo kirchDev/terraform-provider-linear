@@ -73,6 +73,70 @@ resource "linear_workspace_label" "test" {
 	})
 }
 
+// A group's selection mode is the one group setting Linear lets change after
+// create: isGroup is create-only, groupType is on both inputs. So a switch from
+// single- to multi-select has to plan as an in-place update carrying groupType
+// alone, never as the replace is_group forces, which would detach every label
+// nested under the group.
+func TestAccWorkspaceLabel_groupTypeChangesInPlace(t *testing.T) {
+	mock := newLinearMock()
+	srv := mock.server(t)
+
+	const single = `
+resource "linear_workspace_label" "test" {
+  name       = "area"
+  is_group   = true
+  group_type = "singleSelect"
+}
+`
+	const multi = `
+resource "linear_workspace_label" "test" {
+  name       = "area"
+  is_group   = true
+  group_type = "multiSelect"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(srv.URL) + single,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("linear_workspace_label.test", "group_type", "singleSelect"),
+					func(*terraform.State) error {
+						if got := mock.only(t, "issueLabel")["groupType"]; got != "singleSelect" {
+							return fmt.Errorf("create did not send groupType, label holds %#v", got)
+						}
+						return nil
+					},
+				),
+			},
+			{
+				Config: providerConfig(srv.URL) + multi,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("linear_workspace_label.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("linear_workspace_label.test", "group_type", "multiSelect"),
+					func(*terraform.State) error {
+						inputs := mock.updateInputs("issueLabel")
+						if len(inputs) != 1 {
+							return fmt.Errorf("want exactly one issueLabelUpdate, got %d: %#v", len(inputs), inputs)
+						}
+						if got := inputs[0]["groupType"]; got != "multiSelect" || len(inputs[0]) != 1 {
+							return fmt.Errorf("update should carry groupType alone, got %#v", inputs[0])
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
 // Sending only what changed is a property of the shared Update every standard
 // resource runs, not of linear_team — the resource it was reported against
 // happens to be the widest one, which is why its echo was the one Linear

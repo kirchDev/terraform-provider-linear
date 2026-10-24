@@ -37,5 +37,6 @@ data "linear_label" "flaky" {
 
 - `color` (String) Colour of the label as a hex string.
 - `description` (String) Description of the label.
+- `group_type` (String) Selection mode of a label group, `singleSelect` or `multiSelect`. Null for a regular label, and for a group created before Linear had the setting.
 - `is_group` (Boolean) Whether the label is a group other labels nest under.
 - `parent_id` (String) UUID of the parent label group.

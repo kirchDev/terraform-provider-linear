@@ -22,11 +22,13 @@ resource "linear_workspace_label" "ai" {
   description = "Touched by an AI agent"
 }
 
-# Labels nest: a group holds the labels underneath it.
+# Labels nest: a group holds the labels underneath it. A multiSelect group lets
+# an issue carry several of them; the default admits one.
 resource "linear_workspace_label" "area" {
-  name     = "area"
-  color    = "#bec2c8"
-  is_group = true
+  name       = "area"
+  color      = "#bec2c8"
+  is_group   = true
+  group_type = "multiSelect"
 }
 
 resource "linear_workspace_label" "area_infra" {
@@ -47,6 +49,7 @@ resource "linear_workspace_label" "area_infra" {
 
 - `color` (String) Colour of the label as a hex string, e.g. `#5e6ad2`. Linear picks one when unset.
 - `description` (String) Description of the label.
+- `group_type` (String) Selection mode of a label group: `singleSelect` admits one of its labels per issue, `multiSelect` any number of them. Only meaningful with `is_group = true`; null for a regular label. Linear treats a group without a type as `singleSelect`. Changes in place.
 - `is_group` (Boolean) Whether the label is a group — a container other labels nest under, which cannot be applied to an issue itself. Changing this replaces the label.
 - `parent_id` (String) UUID of the parent label group this label nests under. Set it to `""` to unset the reference — leaving the attribute out of the configuration keeps whatever is live, so `""` is how a configuration asks for no reference at all.
 
