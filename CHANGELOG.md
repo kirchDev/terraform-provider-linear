@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/kirchDev/terraform-provider-linear/compare/v0.3.1...v0.4.0) (2026-10-24)
+
+
+### Features
+
+* manage a label group's selection mode ([b8e415f](https://github.com/kirchDev/terraform-provider-linear/commit/b8e415f4b1bb4f244f848475bb916a81cff810a1))
+
 ## [0.3.1](https://github.com/kirchDev/terraform-provider-linear/compare/v0.3.0...v0.3.1) (2026-10-12)
 
 
